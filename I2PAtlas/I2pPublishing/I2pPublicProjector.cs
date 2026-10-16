@@ -52,7 +52,7 @@ internal static class I2pPublicProjector
         type.MediaType is { Length: > 0 and <= 80 } media && media.Contains('/') &&
         media.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '-' or '.' or '+') ? media.ToLowerInvariant() : null;
 
-    // Text only. A future HTML viewer must still escape this value for its output context.
+    // Text only. The HTML viewer escapes this value again for its output context.
     private static string? Title(string? text)
     {
         if (text == null) return null;

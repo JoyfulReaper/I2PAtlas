@@ -48,7 +48,7 @@ public sealed record I2pScanMetrics(double TotalDurationMilliseconds,
     ImmutableSortedDictionary<string, int> HomepageProxyClassifications,
     int HomepageAttemptedCount, int HomepageResponseCount, int UnexpectedProbeFailureCount, int MaximumActiveSeeds);
 
-/// <summary>Versioned immutable private artifact. A future publisher needs its own strict reader and explicit projection.</summary>
+/// <summary>Versioned immutable private artifact; public projection uses a separate strict reader and explicit allowlist.</summary>
 public sealed class I2pRawScanArtifact
 {
     public const string CurrentSchema = "i2patlas.raw-scan";

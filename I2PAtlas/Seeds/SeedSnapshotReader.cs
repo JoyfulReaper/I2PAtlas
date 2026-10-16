@@ -8,7 +8,7 @@ namespace I2PAtlas.Seeds;
 /// <summary>Bounded, local-only validation of private seed state; source metadata is never opened.</summary>
 public static class SeedSnapshotReader
 {
-    // The importer accepts 16 MiB of addressbook characters. Its ASCII seed data
+    // The importer accepts 16 Mi UTF-16 addressbook characters. Its ASCII seed data
     // plus JSON framing fits comfortably here without accepting unbounded JSON.
     public const int MaxSnapshotBytes = 32 * 1024 * 1024;
 

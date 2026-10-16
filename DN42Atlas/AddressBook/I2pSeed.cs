@@ -12,7 +12,8 @@ public sealed record I2pSeed
         Destination = ValidateDestination(destination);
     }
 
-    private static string NormalizeHostname(string value)
+    /// <summary>Shared local hostname validation for seed construction and explicit seed selection.</summary>
+    public static string NormalizeHostname(string value)
     {
         ArgumentNullException.ThrowIfNull(value);
         var name = value.AsSpan().Trim(" \t");

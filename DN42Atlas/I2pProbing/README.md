@@ -2,8 +2,9 @@
 
 `new I2pHttpProbe(transport).ProbeAsync(validatedSeed, cancellationToken)` uses a
 caller-owned `I2pHttpTransport`. It sends only `GET /robots.txt`, with user agent
-`I2PAtlas/0.1`, to the destination-derived Base32 identity. There is no CLI, scanner,
-snapshot orchestration, publisher or viewer integration.
+`I2PAtlas/0.1`, to the destination-derived Base32 identity. The explicit diagnostic
+CLI below is available; scanner, multi-seed orchestration, publisher and viewer
+integration remain outside this component.
 
 ## Observations and authorization
 
@@ -74,3 +75,61 @@ behavior and Base32 routing support. A router experiment alone cannot establish 
 generic origin-authentication contract. Friendly-name virtual hosting, encrypted
 LeaseSets, supported encodings and a well-supported provenance mechanism remain
 future decisions; none may enable DNS, outproxy or direct fallback.
+
+## Local proxy diagnostic
+
+Select one existing friendly hostname from an explicit private seed snapshot and
+an explicit local HTTP proxy:
+
+```text
+dotnet run --project DN42Atlas -- i2p-probe-test private/i2p-seeds.json some-site.i2p http://127.0.0.1:4444
+```
+
+The exact command syntax is:
+
+```text
+i2p-probe-test <snapshot-file> <hostname.i2p> <proxy-uri> [--timeout-ms <1-60000>]
+```
+
+Quote paths containing spaces. Relative snapshot paths resolve against the
+working directory. There is no default seed, snapshot or proxy. Hostnames use
+the existing case, surrounding-space/tab and single-trailing-dot normalization.
+The entire snapshot passes the [validated local reader](../Seeds/README.md#validated-local-loading)
+before any networking, even entries other than the selected seed. Missing seeds
+fail; the command does not import a hostname supplied outside that snapshot.
+
+Proxy validation requires an HTTP URI with literal loopback IP and explicit port.
+The existing transport alone performs networking. The existing probe runs without
+policy changes: one destination-bound `/robots.txt` request, no homepage, no
+redirects, no helper processing, no discovered-link requests. Command dispatch
+precedes all DN42 policy, registry, scanner, lock and publication setup. There is
+no DNS, ambient proxy, direct route, clearnet fallback or output artifact.
+
+The report shows the normalized friendly hostname, destination-derived Base32
+hostname, canonical configured proxy, request outcome, origin-evidence state,
+HTTP status, content media type, buffered body byte count, robots observation,
+homepage disposition/attempt flag, redacted redirect location and its probe
+truncation flag, and elapsed probe milliseconds. Timing covers the probe, not
+snapshot loading. Default timeout is the transport's 10 seconds; an explicit
+`--timeout-ms` can select 1 through 60000 milliseconds. A timeout, connection
+refusal or transport failure still prints the report, with unobserved fields
+labeled accordingly.
+
+Reports are private diagnostic observations, capped at 4096 characters. No full
+destination, source path/hash, snapshot path, robots body, raw headers or reason
+phrase is printed. Content-Type parameters are omitted; only a safe ASCII media
+type up to 80 characters is shown. HTTP(S) redirects show a bounded ASCII authority
+only; credentials, paths, queries and fragments are redacted. Relative, malformed,
+unsupported and unsafe-authority locations receive a redacted placeholder. This
+also prevents address-helper values, tokens and terminal controls leaking through
+redirects. The probe's reusable raw observation remains unchanged. Input/file
+errors omit private paths and values. This command adds no header-based trust
+heuristics and no origin-verification override.
+
+Exit codes: **0** means a complete proxy HTTP response was observed (including
+404/407/500), **1** means snapshot/selection/I/O failure or unsuccessful probe,
+and **2** means invalid/missing command arguments, hostname, proxy or timeout.
+Exit 0 never asserts origin reachability or authorizes a homepage. API caller
+cancellation propagates as `OperationCanceledException`, distinct from timeout.
+Unit/CLI tests use local fake proxies only. Running the example above is an
+explicit real-router diagnostic; automated tests never require a running router.

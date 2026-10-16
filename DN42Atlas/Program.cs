@@ -11,7 +11,7 @@ if (command is "--help" or "-h" or "help")
     return 0;
 }
 
-if (command is not ("resolve" or "web-scan" or "report" or "probe-test" or "run" or "registry-update" or "republish" or "publish-existing" or "import-seeds"))
+if (command is not ("resolve" or "web-scan" or "report" or "probe-test" or "run" or "registry-update" or "republish" or "publish-existing" or "import-seeds" or "i2p-probe-test"))
 {
     CommandUsage.Print();
     return 2;
@@ -22,6 +22,10 @@ try
     // Pure local I2P input transformation needs no DN42 policy, lock, registry or scanner.
     if (command == "import-seeds")
         return await ImportSeedsCommand.ExecuteAsync(args);
+
+    // Explicit I2P integration diagnostic; never construct DN42 policy/discovery.
+    if (command == "i2p-probe-test")
+        return await I2pProbeTestCommand.ExecuteAsync(args);
 
     if (command == "publish-existing" && args.Length != 2)
     {

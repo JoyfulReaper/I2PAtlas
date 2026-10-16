@@ -21,8 +21,8 @@ deduplication, conflict and bounded-input rules. The CLI dispatches before DN42
 exclusion policy, operation locking, registry or scanner construction. Import
 performs only local file transformation: no DNS, HTTP, sockets, proxy discovery,
 router access or registry Git operations. The DN42 scanner does not consume this
-artifact yet. This is an export boundary; loading/version-validation for a future
-scanner belongs to a later slice.
+artifact yet. `SeedSnapshotReader.ReadAsync(path, cancellationToken)` provides the
+local validated loading boundary for the isolated diagnostic and later orchestration.
 
 ## Version 1 format
 
@@ -82,3 +82,29 @@ truncate an existing output. Owned temporary files are removed on normal failure
 A process crash may leave a temporary file; individual same-filesystem rename is
 the safety boundary, not a power-loss durability guarantee or multi-file transaction.
 No output directory is created implicitly and no public artifact is generated.
+
+## Validated local loading
+
+The reader accepts only explicit local file paths, rejecting URLs, UNC and device
+paths before opening. JSON input is capped at 32 MiB, enough for the importer's
+16 MiB addressbook limit plus JSON framing, with maximum nesting depth 8. The
+bound is checked against both the initial file length and bytes actually read.
+It requires the exact, case-sensitive schema and integer version 1, the five
+version-1 root fields, all three source fields and both fields for every seed.
+Duplicate JSON properties, unknown fields, wrong types and missing/null fields
+are rejected. Timestamps must explicitly use UTC (`Z` or `+00:00`); source paths
+must be nonempty, at most 1024 characters and free of controls; hashes must be 64
+hexadecimal characters; source byte lengths must be nonnegative 64-bit integers.
+
+Every seed is reconstructed through `I2pSeed`, preserving its hostname and
+destination validation/normalization rules. Identical normalized mappings are
+deduplicated; conflicting destinations reject the entire snapshot. The array is
+capped at 10000 entries before deduplication, and accepted seeds are sorted
+ordinally in an immutable snapshot. Empty seed arrays are valid. Validation
+errors identify fields or entry indices without echoing private input values.
+
+Source provenance is validated as metadata; the reader does not reopen the
+recorded source path, rehash its contents, or authenticate a user-edited snapshot.
+No network access, DNS, proxy discovery, router or registry operation occurs in
+the reader. The [single-seed diagnostic](../I2pProbing/README.md#local-proxy-diagnostic)
+uses this reader and requires an explicit existing seed and loopback proxy.

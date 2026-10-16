@@ -9,6 +9,7 @@ using DN42Atlas.AddressBook;
 using DN42Atlas.Commands;
 using DN42Atlas.I2pProbing;
 using DN42Atlas.I2pPublishing;
+using DN42Atlas.I2pReporting;
 using DN42Atlas.I2pScanning;
 using DN42Atlas.Seeds;
 using DN42Atlas.I2pTransport;
@@ -58,13 +59,27 @@ public sealed class I2pProjectionTests
         listener.Stop();
         File.Delete(snapshot);
         File.Delete(export);
-        var projected = await new I2pProjectionService().ProjectAsync(rawPath, Path.Combine(files.DirectoryPath, "public.json"));
+        var publicPath = Path.Combine(files.DirectoryPath, "public.json");
+        var projected = await new I2pProjectionService().ProjectAsync(rawPath, publicPath);
         Assert.AreEqual(2, projected.SeedCount);
         Assert.AreEqual(1, projected.UniqueHostnameCount);
         Assert.IsTrue(projected.Entries.All(e => e.Hostname == "plugins.i2p" && e.DestinationsForHostname == 2));
         Assert.IsTrue(projected.Entries.All(e => e.Title == "Real scan shape" && !e.LinkExtractionIncomplete));
         Assert.IsTrue(projected.Entries.All(e => e.DiscoveredI2pHostnames.SequenceEqual(["target.i2p"])));
         CollectionAssert.AreEquivalent(raw.Results.Select(r => r.DestinationHostname).ToArray(), projected.Entries.Select(e => e.DestinationHostname).ToArray());
+        var htmlPath = Path.Combine(files.DirectoryPath, "index.html");
+        var viewed = await new I2pViewerGenerator().GenerateAsync(publicPath, htmlPath);
+        Assert.AreEqual("i2patlas.public-scan", viewed.Schema);
+        Assert.AreEqual(1, viewed.Version);
+        Assert.AreEqual(2, viewed.SeedCount);
+        var html = await File.ReadAllTextAsync(htmlPath);
+        Assert.Contains("Real scan shape", html);
+        foreach (var entry in projected.Entries)
+        {
+            Assert.Contains(entry.DestinationHostname, html);
+            Assert.Contains(I2pViewerGenerator.Id(entry), html);
+        }
+        foreach (var seed in raw.Results) Assert.DoesNotContain(seed.Destination, html);
     }
 
     [TestMethod]

@@ -9,10 +9,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="I2pReporting/viewer.html" LogicalName="DN42Atlas.I2pReporting.viewer.html" />
-    <EmbeddedResource Include="Reporting/viewer.html" LogicalName="DN42Atlas.Reporting.viewer.html" />
-    <EmbeddedResource Include="site/about.html" LogicalName="DN42Atlas.site.about.html" />
-    <EmbeddedResource Include="site/opt-out.html" LogicalName="DN42Atlas.site.opt-out.html" />
-    <EmbeddedResource Include="site/robots.txt" LogicalName="DN42Atlas.site.robots.txt" />
   </ItemGroup>
 
 </Project>

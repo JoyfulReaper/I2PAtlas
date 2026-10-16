@@ -149,6 +149,9 @@ the existing case, surrounding-space/tab and single-trailing-dot normalization.
 The entire snapshot passes the [validated local reader](../Seeds/README.md#validated-local-loading)
 before any networking, even entries other than the selected seed. Missing seeds
 fail; the command does not import a hostname supplied outside that snapshot.
+If the friendly hostname has multiple destinations, this single-host command
+fails before networking rather than selecting one arbitrarily. Use `i2p-scan`
+to probe those distinct seeds independently.
 
 Proxy validation requires an HTTP URI with literal loopback IP and explicit port.
 The existing transport alone performs networking. The probe sends one

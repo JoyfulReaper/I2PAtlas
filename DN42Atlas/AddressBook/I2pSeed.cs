@@ -1,6 +1,6 @@
 namespace DN42Atlas.AddressBook;
 
-/// <summary>A validated local name-to-destination mapping, independent of IP/DNS discovery.</summary>
+/// <summary>A validated local mapping, identified by normalized hostname plus preserved destination text.</summary>
 public sealed record I2pSeed
 {
     public string Hostname { get; }

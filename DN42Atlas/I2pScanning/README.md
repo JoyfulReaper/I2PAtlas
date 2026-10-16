@@ -17,7 +17,9 @@ is no default or ambient proxy. Default concurrency is **2**, with a hard cap of
 4, to limit simultaneous work while allowing for I2P latency. Default timeout is
 10000 ms per request, and default maximum seeds is 10000. Duplicate/unknown
 options and values outside these bounds fail. `--max-seeds` selects the first N
-normalized hostnames in ordinal order, after the entire snapshot is validated.
+hostname/destination pairs in ordinal hostname then destination-text order, after
+the entire snapshot is validated. Alternate destinations for one friendly hostname
+are scanned independently, each using its own destination-derived B32 target.
 
 The public service API is `I2pScanService.ScanAsync(snapshotPath, outputPath,
 proxyUri, settings, cancellationToken)`. CLI dispatch precedes DN42 policy,
@@ -37,7 +39,7 @@ The immutable snapshot is never edited. Exactly `min(concurrency, selected count
 worker tasks claim indices from that fixed seed array. A worker finishes one
 seed before claiming another. There is no task per seed waiting on a semaphore,
 unbounded work queue, scheduling, retry loop or discovered-link expansion.
-Stable index slots preserve normalized hostname order regardless of completion
+Stable index slots preserve hostname/destination order regardless of completion
 order. Results are frozen into an ImmutableArray after all workers finish.
 
 Workers share the existing fixed-proxy transport and stateless `I2pHttpProbe`.
@@ -81,7 +83,8 @@ The format is UTF-8 JSON with camel-case fields and string enums. The root has:
 - `settings`: concurrency, per-request timeout milliseconds, maximum seeds.
 - `snapshotSeedCount`, `totalSeeds`, `seedLimitApplied`: distinguish a selected
   diagnostic prefix from the full snapshot.
-- `results`: immutable per-seed evidence, sorted by hostname.
+- `results`: immutable per-seed evidence, sorted by hostname then destination text;
+  friendly hostnames are not unique result keys.
 - `metrics`: diagnostic aggregates described below.
 
 Each result preserves `hostname`, exact validated `destination`, derived

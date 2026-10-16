@@ -81,7 +81,7 @@ public static class SeedSnapshotReader
         var entries = root.GetProperty("seeds");
         if (entries.ValueKind != JsonValueKind.Array || entries.GetArrayLength() > AddressBookParser.MaxSeeds)
             throw Invalid("seeds must be an array with at most 10000 entries, including duplicates.");
-        var seeds = new Dictionary<string, I2pSeed>(StringComparer.Ordinal);
+        var seeds = new HashSet<I2pSeed>();
         var index = 0;
         foreach (var entry in entries.EnumerateArray())
         {
@@ -92,14 +92,13 @@ public static class SeedSnapshotReader
             I2pSeed seed;
             try { seed = new I2pSeed(hostname, destination); }
             catch (FormatException) { throw Invalid($"Invalid seed at index {index}."); }
-            if (seeds.TryGetValue(seed.Hostname, out var previous) && previous.Destination != seed.Destination)
-                throw Invalid($"Conflicting seed mappings at index {index}.");
-            seeds.TryAdd(seed.Hostname, seed);
+            seeds.Add(seed);
             index++;
         }
         token.ThrowIfCancellationRequested();
         return new I2pSeedSnapshot(importedAt, new SeedFileSource(sourcePath, hash, byteLength),
-            seeds.Values.OrderBy(seed => seed.Hostname, StringComparer.Ordinal).ToImmutableArray());
+            seeds.OrderBy(seed => seed.Hostname, StringComparer.Ordinal)
+                .ThenBy(seed => seed.Destination, StringComparer.Ordinal).ToImmutableArray());
     }
 
     // Reject ambiguous duplicate JSON properties, case variants and unknown fields.

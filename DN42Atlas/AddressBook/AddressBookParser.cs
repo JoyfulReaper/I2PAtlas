@@ -33,7 +33,7 @@ public static class AddressBookParser
         ValidateSource(source);
         var seeds = ImmutableArray.CreateBuilder<I2pSeed>();
         var entryMetadata = ImmutableArray.CreateBuilder<AddressBookEntryMetadata>();
-        var byHost = new Dictionary<string, I2pSeed>(StringComparer.Ordinal);
+        var uniqueSeeds = new HashSet<I2pSeed>();
         var buffer = new char[MaxLineCharacters];
         var length = 0;
         var total = 0;
@@ -65,7 +65,8 @@ public static class AddressBookParser
             buffer[length++] = c;
         }
         if (length > 0) AddLine();
-        return new AddressBookSnapshot(source, seeds.ToImmutable(), entryMetadata.ToImmutable());
+        return new AddressBookSnapshot(source, seeds.OrderBy(seed => seed.Hostname, StringComparer.Ordinal)
+            .ThenBy(seed => seed.Destination, StringComparer.Ordinal).ToImmutableArray(), entryMetadata.ToImmutable());
 
         AddressBookParseException Error(string reason) => new(source, lineNumber, reason);
 
@@ -92,16 +93,13 @@ public static class AddressBookParser
             catch (FormatException ex) { throw Error(ex.Message); }
 
             if (!metadata.IsEmpty)
-                entryMetadata.Add(new(lineNumber, seed.Hostname, metadata));
+                entryMetadata.Add(new(lineNumber, seed.Hostname, seed.Destination, metadata));
 
-            if (byHost.TryGetValue(seed.Hostname, out var previous))
-            {
-                if (!string.Equals(previous.Destination, seed.Destination, StringComparison.Ordinal))
-                    throw Error($"Conflicting destinations for {seed.Hostname}.");
-                return;
-            }
+            // Effective addressbooks can contain alternate destinations for one name.
+            // Record equality uses the normalized hostname and preserved destination text.
+            if (uniqueSeeds.Contains(seed)) return;
             if (seeds.Count == MaxSeeds) throw Error($"Addressbook exceeds {MaxSeeds} unique seeds.");
-            byHost.Add(seed.Hostname, seed);
+            uniqueSeeds.Add(seed);
             seeds.Add(seed);
         }
 
@@ -130,8 +128,7 @@ public static class AddressBookParser
                 foreach (var c in value)
                     if (c is < ' ' or > '~')
                         throw Error("Metadata values must contain printable ASCII characters.");
-                if (key.SequenceEqual("action"))
-                    throw Error("Subscription action metadata is not supported in local seed imports.");
+                // All properties, including action/olddest, are inert export provenance.
                 if (!properties.TryAdd(key.ToString(), value.ToString()))
                     throw Error("Duplicate metadata key.");
             }

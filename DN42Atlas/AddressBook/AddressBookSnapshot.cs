@@ -19,5 +19,5 @@ public sealed class AddressBookSnapshot
 }
 
 /// <summary>Unverified, private import annotations per physical entry, never part of seed identity.</summary>
-public sealed record AddressBookEntryMetadata(int LineNumber, string Hostname,
+public sealed record AddressBookEntryMetadata(int LineNumber, string Hostname, string Destination,
     ImmutableSortedDictionary<string, string> Properties);

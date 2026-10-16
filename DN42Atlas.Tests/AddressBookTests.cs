@@ -58,25 +58,25 @@ public sealed class AddressBookTests
     }
 
     [TestMethod]
-    public void IdenticalDuplicatesAreDeduplicatedAndFirstSeenOrderIsPreserved()
+    public void IdenticalDuplicatesAreDeduplicatedAndHostnameOrderIsDeterministic()
     {
         var snapshot = Parse($"z.i2p={Destination}\nZ.I2P. = {Destination}\n" +
             $"a.i2p={Destination}\nz.i2p={Destination}");
-        CollectionAssert.AreEqual(new[] { "z.i2p", "a.i2p" }, snapshot.Seeds.Select(s => s.Hostname).ToArray());
+        CollectionAssert.AreEqual(new[] { "a.i2p", "z.i2p" }, snapshot.Seeds.Select(s => s.Hostname).ToArray());
         Assert.AreEqual(snapshot.Seeds[0].Destination, snapshot.Seeds[1].Destination);
     }
 
     [TestMethod]
-    public void ConflictingDuplicatesRejectWholeImportWithLocationWithoutEchoingDestinations()
+    public void SameHostnameWithDistinctDestinationsKeepsBothPairsInStableOrder()
     {
         var other = MakeDestination(salt: 1);
-        var error = Assert.ThrowsExactly<AddressBookParseException>(() =>
-            Parse($"# source\r\nexample.i2p={Destination}\r\nEXAMPLE.I2P.={other}\r\n"));
-        Assert.AreEqual(3, error.LineNumber);
-        Assert.AreEqual("test addressbook", error.SourceName);
-        Assert.Contains("Conflicting", error.Message);
-        Assert.DoesNotContain(Destination, error.Message);
-        Assert.DoesNotContain(other, error.Message);
+        var snapshot = Parse($"# source\r\nexample.i2p={Destination}\r\nEXAMPLE.I2P.={other}\r\n");
+        var reversed = Parse($"example.i2p={other}\nexample.i2p={Destination}");
+        Assert.HasCount(2, snapshot.Seeds);
+        Assert.IsTrue(snapshot.Seeds.All(s => s.Hostname == "example.i2p"));
+        CollectionAssert.AreEqual(snapshot.Seeds.ToArray(), reversed.Seeds.ToArray());
+        CollectionAssert.AreEqual(new[] { Destination, other }.Order(StringComparer.Ordinal).ToArray(),
+            snapshot.Seeds.Select(s => s.Destination).ToArray());
     }
 
     [TestMethod]
@@ -146,9 +146,9 @@ public sealed class AddressBookTests
     }
 
     [TestMethod]
-    public void InlineCommentsSubscriptionActionsAndExtraSeparatorsAreRejected()
+    public void InlineCommentsAndExtraSeparatorsAreRejected()
     {
-        foreach (var suffix in new[] { " # comment", " ; comment", "#!action=add", "=extra", "\\" })
+        foreach (var suffix in new[] { " # comment", " ; comment", "=extra", "\\" })
             Assert.ThrowsExactly<AddressBookParseException>(() => Parse($"example.i2p={Destination}{suffix}"));
         Assert.ThrowsExactly<AddressBookParseException>(() => Parse($"\n\uFEFFexample.i2p={Destination}"));
         Assert.ThrowsExactly<FormatException>(() => new I2pSeed("example.i2p", "\n" + Destination));
@@ -177,12 +177,12 @@ public sealed class AddressBookTests
     {
         var padded = MakeDestination(5, 4);
         Assert.IsTrue(padded.EndsWith("==", StringComparison.Ordinal));
-        Assert.ThrowsExactly<AddressBookParseException>(() =>
-            Parse($"example.i2p={padded}\nexample.i2p={padded.TrimEnd('=')}"));
+        var spellings = Parse($"example.i2p={padded}\nexample.i2p={padded.TrimEnd('=')}");
+        CollectionAssert.AreEquivalent(new[] { padded, padded.TrimEnd('=') }, spellings.Seeds.Select(s => s.Destination).ToArray());
         var caseChanged = (Destination[0] == 'a' ? "A" : "a") + Destination[1..];
         Assert.AreEqual(caseChanged, new I2pSeed("example.i2p", caseChanged).Destination);
-        Assert.ThrowsExactly<AddressBookParseException>(() =>
-            Parse($"example.i2p={Destination}\nexample.i2p={caseChanged}"));
+        var distinct = Parse($"example.i2p={Destination}\nexample.i2p={caseChanged}");
+        CollectionAssert.AreEquivalent(new[] { Destination, caseChanged }, distinct.Seeds.Select(s => s.Destination).ToArray());
     }
 
     [TestMethod]
@@ -257,12 +257,12 @@ public sealed class AddressBookTests
     }
 
     [TestMethod]
-    public void SeedLimitCountsUniqueHostnamesAndRejectsOneMore()
+    public void SeedLimitCountsUniquePairsAndRejectsOneMoreEvenForAnExistingHostname()
     {
         var lines = string.Join('\n', Enumerable.Range(0, AddressBookParser.MaxSeeds)
             .Select(i => $"host{i}.i2p={Destination}"));
         Assert.HasCount(AddressBookParser.MaxSeeds, Parse(lines + $"\nHOST0.I2P.={Destination}").Seeds);
-        var error = Assert.ThrowsExactly<AddressBookParseException>(() => Parse(lines + $"\nanother.i2p={Destination}"));
+        var error = Assert.ThrowsExactly<AddressBookParseException>(() => Parse(lines + $"\nhost0.i2p={MakeDestination(salt: 1)}"));
         Assert.AreEqual(AddressBookParser.MaxSeeds + 1, error.LineNumber);
         Assert.Contains("unique seeds", error.Message);
     }

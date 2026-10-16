@@ -62,12 +62,18 @@ public static class I2pProbeTestCommand
             await error.WriteLineAsync("Unable to read the local I2P seed snapshot.");
             return 1;
         }
-        var seed = snapshot.Seeds.SingleOrDefault(seed => seed.Hostname == hostname);
-        if (seed == null)
+        var matches = snapshot.Seeds.Where(seed => seed.Hostname == hostname).Take(2).ToArray();
+        if (matches.Length == 0)
         {
             await error.WriteLineAsync("Requested hostname is absent from the validated seed snapshot.");
             return 1;
         }
+        if (matches.Length > 1)
+        {
+            await error.WriteLineAsync("Requested hostname has multiple destinations; use i2p-scan to probe each seed independently.");
+            return 1;
+        }
+        var seed = matches[0];
 
         using var transport = new I2pHttpTransport(endpoint.Uri.AbsoluteUri, timeout);
         var stopwatch = Stopwatch.StartNew();

@@ -107,7 +107,7 @@ public sealed class SeedSnapshotImportTests
 
     [TestMethod]
     [DataRow("malformed")]
-    [DataRow("conflict")]
+    [DataRow("invalid-metadata")]
     [DataRow("missing-destination")]
     [DataRow("invalid-utf8")]
     [DataRow("oversized-line")]
@@ -122,7 +122,7 @@ public sealed class SeedSnapshotImportTests
         else File.WriteAllText(input, failure switch
         {
             "malformed" => "not an entry",
-            "conflict" => $"example.i2p={Destination}\nEXAMPLE.I2P.={MakeDestination(2)}",
+            "invalid-metadata" => $"example.i2p={Destination}\nEXAMPLE.I2P.={MakeDestination(2)}#!sig=",
             "missing-destination" => "example.i2p=",
             _ => "#" + new string('a', AddressBookParser.MaxLineCharacters)
         });
@@ -289,7 +289,7 @@ public sealed class SeedSnapshotImportTests
     [DataRow("empty-path", 2)]
     [DataRow("missing-input", 1)]
     [DataRow("malformed-input", 1)]
-    [DataRow("conflicting-input", 1)]
+    [DataRow("invalid-metadata", 1)]
     [DataRow("missing-output-directory", 1)]
     public async Task CliUsageAndImportFailuresHaveClearExitCodesAndPreserveOutput(string failure, int code)
     {
@@ -297,7 +297,7 @@ public sealed class SeedSnapshotImportTests
         files.Write("hosts.txt", failure switch
         {
             "malformed-input" => "broken",
-            "conflicting-input" => $"example.i2p={Destination}\nexample.i2p={MakeDestination(2)}",
+            "invalid-metadata" => $"example.i2p={Destination}\nexample.i2p={MakeDestination(2)}#!sig=",
             _ => $"example.i2p={Destination}"
         });
         var output = files.Write("seeds.json", "previous output");
@@ -322,7 +322,7 @@ public sealed class SeedSnapshotImportTests
             Assert.AreEqual("", result.Output);
             Assert.IsFalse(string.IsNullOrWhiteSpace(result.Error));
         }
-        if (failure == "conflicting-input") Assert.Contains("Conflicting destinations", result.Error);
+        if (failure == "invalid-metadata") Assert.Contains("Metadata requires nonempty", result.Error);
         Assert.DoesNotContain(Destination, result.Error);
         Assert.AreEqual("previous output", await File.ReadAllTextAsync(output));
         Assert.IsEmpty(Directory.GetFiles(files.DirectoryPath, ".i2p-seeds-*.tmp"));

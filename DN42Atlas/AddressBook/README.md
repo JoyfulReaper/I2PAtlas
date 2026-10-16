@@ -12,7 +12,7 @@ structured SusiDNS export metadata as described below. LF, CRLF and CR line
 endings are accepted, including a final line without a newline. Blank lines and
 lines whose first non-space/tab character is `#` or `;` are ignored. Only ASCII
 spaces and tabs are removed around fields. Split at the first `=`: trailing `=`
-characters belong to Base64 padding. Arbitrary inline comments, subscription commands,
+characters belong to Base64 padding. Arbitrary inline comments,
 continuations and escaped/property-file syntax are not supported and fail
 validation when appended to an entry. A leading BOM is accepted only at the
 start of input. Invalid UTF-8 fails explicitly.
@@ -23,7 +23,8 @@ SusiDNS's [export method](https://github.com/i2p/i2p.i2p/blob/master/apps/susidn
 delegates to the naming service. I2P's [HostTxtEntry writer/parser](https://github.com/i2p/i2p.i2p/blob/master/core/java/src/net/i2p/client/naming/HostTxtEntry.java)
 uses `name=destination#!key=value#key=value`, splitting each property at its first
 `=` and rejecting duplicate case-sensitive keys. The [subscription format](https://www.i2p.net/en/docs/specs/subscription/)
-also defines command actions; this local seed importer does not implement them.
+also defines command actions. This importer consumes an effective addressbook export,
+not a subscription update stream, and never executes those actions.
 
 After removing ASCII spaces/tabs at the physical line's edges, the supported
 entry grammar is:
@@ -56,16 +57,20 @@ values and separators. Limits are inclusive and do not replace line/input limits
 
 `date` and `sig` are retained as opaque strings: dates are not interpreted or
 used for expiry, and signatures are not cryptographically verified or treated as
-proof. Unknown keys follow the same bounded generic-retention rules. The exact
-reserved key `action` is rejected because subscription commands remain unsupported.
+proof. Unknown keys follow the same bounded generic-retention rules. `action`,
+`olddest` and `oldsig` follow those same rules: `adddest`, `changedest`, `remove`,
+and other syntactically valid action values are inert provenance on an ordinary
+hostname/destination mapping. They never add, replace or remove other entries.
+Standalone `#!...` records remain ignored whole-line comments, never mutation
+commands. A mapping with a missing hostname or destination still fails validation.
 Metadata called `hostname`, `dest` or similar never overrides the actual mapping.
 
 `AddressBookSnapshot.EntryMetadata` is a private, immutable array of per-line
-annotations (line number, normalized hostname, ordinally sorted immutable property
+annotations (line number, normalized hostname, preserved destination, ordinally sorted immutable property
 map). Identical mapping duplicates still deduplicate as before; their annotations
 remain separate physical-line records rather than arbitrarily choosing metadata.
 Every duplicate's suffix is validated before deduplication. Different annotation
-values never resolve or hide destination conflicts. Total input size also bounds
+values never change mapping identity. Total input size also bounds
 retained annotations, including duplicate entries.
 
 I2pSeed and the version-1 imported seed JSON contain no metadata fields. There is
@@ -73,7 +78,9 @@ no current scan need to persist these annotations. The importer still hashes the
 exact original export bytes, including metadata, signature text, comments, BOM and
 line endings; it does not hash a reconstructed metadata-free addressbook. The
 regression fixture uses the observed `8ightball.i2p=...#!date=1790878952#sig=...`
-shape with synthetic keys/signature rather than a live router dependency.
+shape with synthetic keys/signature rather than a live router dependency. The
+alternate-destination fixture adds the observed `action=adddest`, `olddest`, `date`,
+`sig` and `oldsig` shape with two mappings for `example.i2p`.
 
 Hostnames are lowercased invariantly and one optional final dot is removed.
 The result must have at least one label before `.i2p`, at most 253 characters
@@ -96,15 +103,18 @@ case, alphabet and padding are preserved exactly apart from surrounding spaces/t
 See the [I2P structure specification](https://i2p.net/en/docs/specs/common-structures/)
 and [reference Base64 implementation](https://github.com/i2p/i2p.i2p/blob/master/core/java/src/net/i2p/data/Base64.java).
 
-Duplicate normalized hostnames with ordinally identical destination text are
-deduplicated. Conflicts fail the entire import, including padded versus unpadded
-spellings of the same destination; no destination canonicalization is attempted.
-Different friendly names may share a destination. Successful snapshots retain
-first-seen order, immutable seeds and a source label (the absolute path for file
+Seed identity is the normalized hostname plus ordinally identical destination text.
+Exact pairs deduplicate; one hostname may have multiple distinct destinations.
+Padded and unpadded spellings remain distinct pairs even if their derived B32
+identity is the same; no destination canonicalization is attempted. Different
+friendly names may share a destination. Successful snapshots sort by hostname,
+then preserved destination text, both ordinally and independently of input order.
+Using the exact text as the tie-breaker keeps the seed layer independent of the
+HTTP target implementation. Snapshots contain immutable seeds and a source label (the absolute path for file
 imports). Source plus the preserved destination provide minimal import provenance
 and destination identity for later artifacts; there is no raw scan schema here.
 Errors carry a one-based line number and source label and never echo destinations.
-Malformed entries, missing fields, conflicts and exceeded limits throw
+Malformed entries, missing fields and exceeded limits throw
 `AddressBookParseException` without returning a partial snapshot. File/reader I/O
 and encoding failures propagate. Invalid API arguments throw argument exceptions.
 
@@ -118,7 +128,7 @@ Fixed limits bound both work and retained memory:
 | Metadata suffix after `#!` | 4,096 characters | Bounds a complete property block before allocating its map |
 | Metadata properties per line | 16 | Bounds generic annotation count; duplicate keys reject |
 | Metadata key / value | 64 / 2,048 characters | Bounds each retained annotation |
-| Unique normalized hostnames | 10,000 | Bounds collection overhead; identical duplicates still count toward total input |
+| Unique hostname/destination pairs | 10,000 | Bounds collection overhead, including alternate destinations; exact duplicates still count toward total input |
 | Source label | 1,024 characters, no controls | Bounded provenance and diagnostics |
 
 Limits are inclusive. Empty/comment-only books produce an empty snapshot. Large

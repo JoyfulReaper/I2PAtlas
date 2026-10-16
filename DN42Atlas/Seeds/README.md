@@ -17,7 +17,7 @@ parser's source/line diagnostics where applicable, without destination contents.
 
 `SeedSnapshotImporter.ImportAsync` uses the existing
 [AddressBookParser](../AddressBook/README.md) and retains all of its validation,
-deduplication, conflict and bounded-input rules. The CLI dispatches before DN42
+pair deduplication and bounded-input rules. The CLI dispatches before DN42
 exclusion policy, operation locking, registry or scanner construction. Import
 performs only local file transformation: no DNS, HTTP, sockets, proxy discovery,
 router access or registry Git operations. The DN42 scanner does not consume this
@@ -47,7 +47,11 @@ camel-case field names, fixed property order and indented formatting:
 
 The import timestamp comes from `TimeProvider` after successful parsing and is
 normalized to UTC. Tests can supply a fixed clock. Seeds are sorted by normalized
-hostname with `StringComparer.Ordinal`, independent of input order or culture.
+hostname then preserved destination text with `StringComparer.Ordinal`, independent
+of input order or culture. Version 1's seed array permits multiple mappings for
+one hostname; identity is the hostname/destination pair. Each pair becomes an
+independent scan seed. Exact pairs deduplicate. Existing single-destination files
+retain their meaning; the JSON shape and schema version are unchanged.
 Destination case, I2P Base64 alphabet and padding remain unchanged except for the
 existing parser's permitted surrounding spaces/tabs. Empty books have `seeds: []`.
 No DN42 resolution status, IP address array or registry model is used.
@@ -76,7 +80,7 @@ view's publication/exclusion policy. Keep this artifact outside all served roots
 After a complete successful import, JSON is written to a unique private temporary
 file in the output directory, flushed to disk, closed, then moved over the output.
 On Unix, the shared `PrivateFile` helper creates it with owner read/write (0600);
-Windows uses the directory's inherited ACLs. Parser, conflict, encoding, missing
+Windows uses the directory's inherited ACLs. Parser, encoding, missing
 input/directory, serialization, cancellation and replacement failures do not
 truncate an existing output. Owned temporary files are removed on normal failure.
 A process crash may leave a temporary file; individual same-filesystem rename is
@@ -97,10 +101,10 @@ must be nonempty, at most 1024 characters and free of controls; hashes must be 6
 hexadecimal characters; source byte lengths must be nonnegative 64-bit integers.
 
 Every seed is reconstructed through `I2pSeed`, preserving its hostname and
-destination validation/normalization rules. Identical normalized mappings are
-deduplicated; conflicting destinations reject the entire snapshot. The array is
+destination validation/normalization rules. Identical normalized hostname/destination
+pairs are deduplicated; alternate destinations for one hostname are retained. The array is
 capped at 10000 entries before deduplication, and accepted seeds are sorted
-ordinally in an immutable snapshot. Empty seed arrays are valid. Validation
+by hostname then destination text ordinally in an immutable snapshot. Empty seed arrays are valid. Validation
 errors identify fields or entry indices without echoing private input values.
 
 Source provenance is validated as metadata; the reader does not reopen the

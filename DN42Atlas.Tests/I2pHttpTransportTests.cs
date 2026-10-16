@@ -447,6 +447,7 @@ public sealed class I2pHttpTransportTests
             }
             catch (OperationCanceledException) when (stopped.IsCancellationRequested) { }
             catch (SocketException) when (stopped.IsCancellationRequested) { }
+            catch (ObjectDisposedException) when (stopped.IsCancellationRequested) { }
             catch (IOException) when (stopped.IsCancellationRequested) { }
         }
 

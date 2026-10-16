@@ -93,28 +93,22 @@ public sealed class SeedSnapshotReaderTests
     [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
-    public async Task NormalizedDuplicatesAreDeduplicatedButConflictsFail(bool conflict)
+    public async Task NormalizedPairsDeduplicateAndAlternateDestinationsSurvive(bool alternate)
     {
         using var files = new TestFiles();
         var json = SeedSnapshotTestData.Snapshot();
         json["seeds"]!.AsArray().Add(new JsonObject
         {
             ["hostname"] = " FRIENDLY.I2P. ",
-            ["destination"] = "\t" + SeedSnapshotTestData.Destination(salt: conflict ? 1 : 0) + " "
+            ["destination"] = "\t" + SeedSnapshotTestData.Destination(salt: alternate ? 1 : 0) + " "
         });
+        json["seeds"]!.AsArray().Add(json["seeds"]![1]!.DeepClone());
         var path = files.Write("seeds.json", json.ToJsonString());
-        if (conflict)
-        {
-            var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => SeedSnapshotReader.ReadAsync(path));
-            Assert.Contains("Conflicting seed mappings", error.Message);
-        }
-        else
-        {
-            var loaded = await SeedSnapshotReader.ReadAsync(path);
-            Assert.HasCount(1, loaded.Seeds);
-            Assert.AreEqual("friendly.i2p", loaded.Seeds[0].Hostname);
-            Assert.AreEqual(SeedSnapshotTestData.Destination(), loaded.Seeds[0].Destination);
-        }
+        var loaded = await SeedSnapshotReader.ReadAsync(path);
+        Assert.HasCount(alternate ? 2 : 1, loaded.Seeds);
+        Assert.IsTrue(loaded.Seeds.All(s => s.Hostname == "friendly.i2p"));
+        Assert.Contains(SeedSnapshotTestData.Destination(), loaded.Seeds.Select(s => s.Destination));
+        if (alternate) Assert.Contains(SeedSnapshotTestData.Destination(salt: 1), loaded.Seeds.Select(s => s.Destination));
     }
 
     [TestMethod]

@@ -20,6 +20,56 @@ namespace DN42Atlas.Tests;
 public sealed class I2pScanTests
 {
     [TestMethod]
+    public async Task AlternateDestinationsForOneHostnameProduceIndependentDestinationBoundResults()
+    {
+        using var files = new TestFiles();
+        using var fixture = SusiDnsAddressBookTests.AlternateFixture();
+        using var reader = new StreamReader(fixture, new UTF8Encoding(false, true));
+        var export = await reader.ReadToEndAsync();
+        var input = files.Write("router-book.txt", export);
+        var snapshotPath = Path.Combine(files.DirectoryPath, "seeds.json");
+        var imported = await new SeedSnapshotImporter().ImportAsync(input, snapshotPath);
+        Assert.HasCount(2, imported.Seeds);
+        var firstB32 = Target(imported.Seeds[0]).DestinationHostname;
+        var secondB32 = Target(imported.Seeds[1]).DestinationHostname;
+        Assert.AreNotEqual(firstB32, secondB32);
+        // Reader ordering must be deterministic even for hand-reordered snapshot arrays.
+        var json = JsonNode.Parse(await File.ReadAllTextAsync(snapshotPath))!;
+        var entries = json["seeds"]!.AsArray().Select(s => s!.DeepClone()).Reverse().ToArray();
+        json["seeds"] = new JsonArray(entries);
+        await File.WriteAllTextAsync(snapshotPath, json.ToJsonString());
+        File.Delete(input);
+        await using var proxy = new ScanProxy((uri, _) => Task.FromResult<byte[]?>(
+            uri.Host == firstB32
+                ? uri.AbsolutePath == "/robots.txt"
+                    ? Response(200, "User-agent: *\nAllow: /", "text/plain")
+                    : Response(200, "<title>First destination</title><a href='http://inert.i2p/'>inert</a>", "text/html")
+                : Response(504, "second destination unreachable", "text/html")));
+        using var dns = new NameResolutionObserver();
+        var output = Path.Combine(files.DirectoryPath, "scan.json");
+        var scan = await new I2pScanService().ScanAsync(snapshotPath, output, proxy.Uri);
+        Assert.AreEqual(2, scan.TotalSeeds);
+        CollectionAssert.AreEqual(new[] { "example.i2p", "example.i2p" }, scan.Results.Select(r => r.Hostname).ToArray());
+        CollectionAssert.AreEqual(imported.Seeds.Select(s => s.Destination).ToArray(), scan.Results.Select(r => r.Destination).ToArray());
+        CollectionAssert.AreEqual(new[] { firstB32, secondB32 }, scan.Results.Select(r => r.DestinationHostname).ToArray());
+        Assert.AreEqual("First destination", scan.Results[0].HomepageMetadata!.Title);
+        Assert.IsTrue(scan.Results[0].HomepageRequestAttempted);
+        Assert.IsFalse(scan.Results[1].HomepageRequestAttempted);
+        Assert.AreEqual(I2pProxyResponseClassification.LikelyProxyFailure, scan.Results[1].RobotsProxyClassification);
+        Assert.AreEqual(1, scan.Metrics.HomepageAttemptedCount);
+        Assert.AreEqual(2, scan.Metrics.RobotsRequestOutcomes["ProxyHttpResponse"]);
+        Assert.HasCount(3, proxy.Requests);
+        Assert.AreEqual(2, proxy.Requests.Count(uri => uri.Host == firstB32));
+        Assert.AreEqual(1, proxy.Requests.Count(uri => uri.Host == secondB32));
+        Assert.IsTrue(proxy.Requests.All(uri => uri.Host == firstB32 || uri.Host == secondB32));
+        Assert.IsEmpty(dns.Hostnames);
+        var raw = JsonSerializer.Deserialize<I2pRawScanArtifact>(await File.ReadAllTextAsync(output), I2pRawScanFile.JsonOptions)!;
+        CollectionAssert.AreEqual(scan.Results.Select(r => r.Destination).ToArray(), raw.Results.Select(r => r.Destination).ToArray());
+        Assert.IsFalse(Directory.Exists(Path.Combine(files.DirectoryPath, "published")));
+        AssertNoStaging(files);
+    }
+
+    [TestMethod]
     public async Task MultiSeedScanPreservesEvidenceIdentityOrderingMetricsAndPrivateBoundary()
     {
         using var files = new TestFiles();

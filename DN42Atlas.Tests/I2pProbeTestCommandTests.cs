@@ -114,7 +114,7 @@ public sealed class I2pProbeTestCommandTests
     [DataRow("absent")]
     [DataRow("invalid-second-seed")]
     [DataRow("missing-hostname-field")]
-    [DataRow("conflict")]
+    [DataRow("ambiguous-hostname")]
     public async Task SelectionAndWholeSnapshotValidationFinishBeforeNetworking(string failure)
     {
         using var files = new TestFiles();
@@ -124,14 +124,19 @@ public sealed class I2pProbeTestCommandTests
         {
             case "invalid-second-seed": seeds.Add(new System.Text.Json.Nodes.JsonObject { ["hostname"] = "other.i2p", ["destination"] = "PRIVATE-invalid" }); break;
             case "missing-hostname-field": seeds[0]!.AsObject().Remove("hostname"); break;
-            case "conflict": seeds.Add(new System.Text.Json.Nodes.JsonObject { ["hostname"] = "FRIENDLY.I2P.", ["destination"] = SeedSnapshotTestData.Destination(salt: 1) }); break;
+            case "ambiguous-hostname": seeds.Add(new System.Text.Json.Nodes.JsonObject { ["hostname"] = "FRIENDLY.I2P.", ["destination"] = SeedSnapshotTestData.Destination(salt: 1) }); break;
         }
         var path = files.Write("seeds.json", json.ToJsonString());
         await using var proxy = new FakeProxy(Response(200, ""));
         var result = await Execute(path, failure == "absent" ? "absent.i2p" : "friendly.i2p", proxy.Uri);
         Assert.AreEqual(1, result.Code);
         Assert.AreEqual("", result.Output);
-        Assert.Contains(failure == "absent" ? "absent from the validated seed snapshot" : "Invalid I2P seed snapshot", result.Error);
+        Assert.Contains(failure switch
+        {
+            "absent" => "absent from the validated seed snapshot",
+            "ambiguous-hostname" => "multiple destinations",
+            _ => "Invalid I2P seed snapshot"
+        }, result.Error);
         Assert.DoesNotContain("PRIVATE-invalid", result.Error);
         AssertPrivateAndBounded(result, path);
         Assert.IsEmpty(proxy.Requests);

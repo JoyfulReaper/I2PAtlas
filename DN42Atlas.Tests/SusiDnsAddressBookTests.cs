@@ -29,6 +29,7 @@ public sealed class SusiDnsAddressBookTests
         var metadata = parsed.EntryMetadata.Single();
         Assert.AreEqual(2, metadata.LineNumber);
         Assert.AreEqual("example.i2p", metadata.Hostname);
+        Assert.AreEqual(Destination, metadata.Destination);
         Assert.AreEqual("1790878952", metadata.Properties["date"]);
         Assert.AreEqual("AbC-~==", metadata.Properties["sig"]);
         Assert.AreEqual("keep=this=value", metadata.Properties["vendor.key"]);
@@ -91,7 +92,6 @@ public sealed class SusiDnsAddressBookTests
     [DataRow("#!note=bad\tvalue")]
     [DataRow("#!note=bad\0value")]
     [DataRow("#!note=café")]
-    [DataRow("#!action=add")]
     public void MalformedMetadataFailsWithoutEchoingValues(string suffix)
     {
         var error = Assert.ThrowsExactly<AddressBookParseException>(() => Parse($"# source\nexample.i2p={Destination}{suffix}"));
@@ -139,7 +139,7 @@ public sealed class SusiDnsAddressBookTests
     }
 
     [TestMethod]
-    public void MappingDuplicatesKeepTheirOriginalRulesAndMetadataRemainsPerLine()
+    public void MappingPairsDeduplicateAndMetadataRemainsBoundToEachPhysicalMapping()
     {
         var parsed = Parse($"example.i2p={Destination}#!date=1#sig=first\nEXAMPLE.I2P.={Destination}#!date=2#sig=second\nexample.i2p={Destination}");
         Assert.HasCount(1, parsed.Seeds);
@@ -147,12 +147,74 @@ public sealed class SusiDnsAddressBookTests
         CollectionAssert.AreEqual(new[] { 1, 2 }, parsed.EntryMetadata.Select(m => m.LineNumber).ToArray());
         Assert.AreEqual("first", parsed.EntryMetadata[0].Properties["sig"]);
         Assert.AreEqual("second", parsed.EntryMetadata[1].Properties["sig"]);
-        Assert.ThrowsExactly<AddressBookParseException>(() => Parse(
-            $"example.i2p={Destination}#!date=1\nEXAMPLE.I2P.={SeedSnapshotTestData.Destination(salt: 1)}#!date=1"));
-        Assert.ThrowsExactly<AddressBookParseException>(() => Parse(
-            $"example.i2p={Destination}#!date=1\nEXAMPLE.I2P.={Destination.TrimEnd('=')}#!date=1"));
+        var other = SeedSnapshotTestData.Destination(salt: 1);
+        var alternates = Parse($"example.i2p={Destination}#!date=1\nEXAMPLE.I2P.={other}#!date=1");
+        Assert.HasCount(2, alternates.Seeds);
+        CollectionAssert.AreEqual(new[] { Destination, other }, alternates.EntryMetadata.Select(m => m.Destination).ToArray());
+        Assert.HasCount(2, Parse($"example.i2p={Destination}#!date=1\nEXAMPLE.I2P.={Destination.TrimEnd('=')}#!date=1").Seeds);
         // An identical mapping cannot hide an invalid suffix on a later duplicate.
         Assert.ThrowsExactly<AddressBookParseException>(() => Parse($"example.i2p={Destination}\nexample.i2p={Destination}#!sig="));
+    }
+
+    [TestMethod]
+    [DataRow("adddest")]
+    [DataRow("changedest")]
+    [DataRow("remove")]
+    [DataRow("removeall")]
+    [DataRow("future-action")]
+    public void ActionsOnMaterializedMappingsAreOpaqueProvenanceAndNeverExecuted(string action)
+    {
+        var other = SeedSnapshotTestData.Destination(salt: 1);
+        var parsed = Parse($"example.i2p={Destination}\nexample.i2p={other}#!action={action}#olddest={Destination}" +
+            $"\nexample.i2p={other}#!action=remove\n#!action=removeall#name=example.i2p");
+        CollectionAssert.AreEquivalent(new[] { Destination, other }, parsed.Seeds.Select(s => s.Destination).ToArray());
+        Assert.AreEqual(action, parsed.EntryMetadata[0].Properties["action"]);
+        Assert.AreEqual(Destination, parsed.EntryMetadata[0].Properties["olddest"]);
+        Assert.AreEqual(other, parsed.EntryMetadata[0].Destination);
+        Assert.AreEqual(other, parsed.EntryMetadata[1].Destination);
+        // Whole #! lines remain comments, not subscription commands; incomplete mappings still fail.
+        Assert.IsEmpty(Parse("#!action=remove#name=example.i2p").Seeds);
+        Assert.ThrowsExactly<AddressBookParseException>(() => Parse($"= {other}#!action={action}"));
+        Assert.ThrowsExactly<AddressBookParseException>(() => Parse($"example.i2p=#!action={action}"));
+    }
+
+    [TestMethod]
+    public async Task AlternateDestinationFixtureSurvivesImportAndReadWithoutChangingIdentityOrSourceHash()
+    {
+        using var files = new TestFiles();
+        using var stream = AlternateFixture();
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory);
+        var bytes = memory.ToArray();
+        var text = Encoding.UTF8.GetString(bytes);
+        var parsed = Parse(text);
+        Assert.HasCount(2, parsed.Seeds);
+        Assert.IsTrue(parsed.Seeds.All(s => s.Hostname == "example.i2p"));
+        var metadata = parsed.EntryMetadata.Single();
+        Assert.AreEqual("adddest", metadata.Properties["action"]);
+        Assert.AreEqual(new string('A', 516), metadata.Properties["olddest"]);
+        Assert.AreEqual("QUJD" + new string('A', 512), metadata.Destination);
+        Assert.HasCount(5, metadata.Properties);
+        var input = files.Write("router-book.txt", text + $"\nEXAMPLE.I2P.={metadata.Destination}#!action=remove");
+        var output = Path.Combine(files.DirectoryPath, "seeds.json");
+        var imported = await new SeedSnapshotImporter().ImportAsync(input, output);
+        CollectionAssert.AreEqual(parsed.Seeds.ToArray(), imported.Seeds.ToArray());
+        Assert.AreEqual(Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(input))), imported.Source.Sha256);
+        File.Delete(input); // No source re-read or subscription replay during snapshot loading.
+        var loaded = await SeedSnapshotReader.ReadAsync(output);
+        CollectionAssert.AreEqual(imported.Seeds.ToArray(), loaded.Seeds.ToArray());
+        var lines = text.Split('\n').Where(line => line.Length > 0 && !line.StartsWith('#')).Reverse();
+        var reversed = Parse(string.Join('\n', lines));
+        CollectionAssert.AreEqual(parsed.Seeds.ToArray(), reversed.Seeds.ToArray());
+        var reorderedInput = files.Write("reordered.txt", string.Join('\n', lines));
+        var reordered = await new SeedSnapshotImporter().ImportAsync(reorderedInput, output);
+        CollectionAssert.AreEqual(imported.Seeds.ToArray(), reordered.Seeds.ToArray());
+        CollectionAssert.AreEqual(imported.Seeds.ToArray(), (await SeedSnapshotReader.ReadAsync(output)).Seeds.ToArray());
+        Assert.AreNotEqual(imported.Source.Sha256, reordered.Source.Sha256);
+        var json = await File.ReadAllTextAsync(output);
+        Assert.DoesNotContain("action", json);
+        Assert.DoesNotContain("olddest", json);
+        Assert.DoesNotContain("synthetic-signature", json);
     }
 
     [TestMethod]
@@ -207,6 +269,9 @@ public sealed class SusiDnsAddressBookTests
 
     private static Stream Fixture() => typeof(SusiDnsAddressBookTests).Assembly.GetManifestResourceStream(
         "DN42Atlas.Tests.Fixtures.susidns-export.hosts.txt") ?? throw new AssertFailedException("Missing SusiDNS fixture.");
+
+    internal static Stream AlternateFixture() => typeof(SusiDnsAddressBookTests).Assembly.GetManifestResourceStream(
+        "DN42Atlas.Tests.Fixtures.susidns-alternate-destinations.hosts.txt") ?? throw new AssertFailedException("Missing alternate-destination fixture.");
 
     private static AddressBookSnapshot Parse(string text)
     {

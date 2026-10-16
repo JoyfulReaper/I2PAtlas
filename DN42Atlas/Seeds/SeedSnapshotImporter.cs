@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -65,7 +64,7 @@ public sealed class SeedSnapshotImporter(TimeProvider? timeProvider = null)
         var parsed = AddressBookParser.Parse(reader, path);
         var source = new SeedFileSource(parsed.Source, Convert.ToHexString(sha256.Hash!), input.Position);
         return new I2pSeedSnapshot(timeProvider.GetUtcNow(), source,
-            parsed.Seeds.OrderBy(seed => seed.Hostname, StringComparer.Ordinal).ToImmutableArray());
+            parsed.Seeds);
     }
 
     private static string LocalPath(string path)

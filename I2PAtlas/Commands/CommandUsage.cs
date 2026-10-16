@@ -10,6 +10,7 @@ public static class CommandUsage
         Console.WriteLine("  import-seeds <addressbook-file> <snapshot-file> Import local I2P seeds into private JSON state");
         Console.WriteLine("  i2p-probe-test <snapshot-file> <hostname.i2p> <proxy-uri> [--timeout-ms <1-60000>] Private single-seed robots/homepage diagnostic");
         Console.WriteLine("  i2p-scan <snapshot-file> <private-output-file> <proxy-uri> [--concurrency <1-4>] [--timeout-ms <1-60000>] [--max-seeds <1-10000>] Private bounded I2P scan");
+        Console.WriteLine("  i2p-crawl <snapshot-file> <private-output-file> <proxy-uri> [--concurrency <1-4>] [--timeout-ms <1-60000>] [--max-seeds <1-10000>] [--max-discovered-hosts <0-1000>] Private one-hop I2P crawl; no public crawl projection/viewer");
         Console.WriteLine("  --help, -h, help                 Show this usage");
     }
 }

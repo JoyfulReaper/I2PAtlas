@@ -28,8 +28,8 @@ underlying HttpClient/handler.
 
 ## Internal host-only probe foundation
 
-Existing commands still use destination-bound seeds. There is no discovery
-frontier or crawler command. Internal `I2pProbeTarget` has only two closed variants:
+The scanner and diagnostic use destination-bound seeds; the separate private
+one-hop crawler also uses host-only targets. Internal `I2pProbeTarget` has only two closed variants:
 `KnownSeed` retains its validated seed and destination-derived B32, while
 `DiscoveredHost` contains only a normalized hostname and `Friendly` or
 `ClassicBase32` host form. It has no Base64 destination or inferred destination

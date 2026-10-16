@@ -1,9 +1,113 @@
-# Internal offline host discovery
+# Private one-hop crawling
 
-Crawler 1a adds only pure depth-1 frontier selection. There is no `i2p-crawl`
-command, network orchestration, persistence schema or production caller scheduling
-discovered hosts. Depth bounds beyond this fixed depth-1 work belong to future
-orchestration; there is no max-depth setting here.
+`i2p-crawl` runs a private, bounded depth-0 seed wave followed by a terminal depth-1
+host-only wave. The existing Crawler 1a selector remains a pure offline component.
+There is no public crawl projection or viewer. `i2p-project` and `i2p-view` reject
+raw-crawl input. Nothing below authenticates response origin.
+
+```text
+dotnet run --project I2PAtlas -- i2p-crawl <snapshot-file> <private-output-file> <proxy-uri> [--concurrency <1-4>] [--timeout-ms <1-60000>] [--max-seeds <1-10000>] [--max-discovered-hosts <0-1000>]
+```
+
+Defaults are concurrency 2, request deadline 10000 ms, at most 10000 known seeds
+and 100 discovered hosts. Output directories must exist. Depth is fixed to 1;
+there is no max-depth option. Exit codes are 0 for installed output, 2 for invalid
+arguments, 1 for validation/I/O/infrastructure failures and 130 for caller
+cancellation. Individual target failures remain observations and do not fail the
+command. Console output contains only bounded counts/duration and an
+unauthenticated-response warning, without identities, URLs or private error text.
+
+## Orchestration
+
+`I2pCrawlService` strictly loads and hashes the snapshot once using
+`SeedSnapshotReader.ReadWithIdentityAsync`. It selects the first MaximumSeeds
+entries in existing hostname-then-preserved-destination-text order. Each semantic
+seed becomes its own `KnownSeed` probe, including alternate destinations.
+Exactly `min(concurrency, wave target count)` workers claim stable result slots;
+there is no task per seed/host waiting for capacity.
+
+After every depth-0 worker finishes, the existing selector runs exactly once
+with the complete snapshot for suppression and completed selected observations.
+Only its immutable admitted work items enter depth 1. The same worker limit,
+single guarded transport and shared probe state machine serve both waves.
+Discovered requests use only `/robots.txt` and conditional `/`, never original
+paths/queries/fragments. Depth-1 homepage links are retained privately and are
+never selected or scheduled. Zero discovered-host capacity still records frontier
+reference/limit metrics without making depth-1 requests.
+
+Host-only observations have no destination pinning claim. Friendly hosts depend
+on the configured proxy/router addressbook; classic B32 hosts retain their
+literal canonical name. No local target DNS or direct connector is added.
+
+Expected network failures stay observations. Unexpected nonfatal probe exceptions
+become fixed `UnexpectedProbeFailure` evidence with unknown partial state and no
+exception text/stack/path. Resource exhaustion is not converted into an
+observation. Infrastructure failure cancels siblings and aborts installation;
+caller cancellation also preserves previous output. There are no application retries.
+
+## Private raw-crawl v1
+
+`I2pRawCrawlArtifact` has schema `i2patlas.raw-crawl`, version 1 and these fields:
+
+- `crawlStartedAtUtc`, `crawlCompletedAtUtc`.
+- `snapshot`: seed schema/version, exact snapshot-file SHA-256/byte length,
+  import UTC time and original addressbook source SHA-256/byte length.
+- `proxy`: canonical loopback address and port, without credentials.
+- `settings`: concurrency, requestTimeoutMilliseconds, maximumSeeds,
+  maximumDiscoveredHosts.
+- `snapshotSeedCount`, `selectedSeedCount`, `seedLimitApplied`.
+- `discovery`: eligibleReferenceCount, admittedHostCount, admissionLimitApplied.
+- `knownSeedResults`, `discoveredHostResults`, `metrics`.
+
+Known results contain hostname, preserved Base64 destination, recomputed
+destinationHostname, depth 0 and `evidence`. They retain snapshot order (hostname
+then preserved destination text, ordinal), with unique hostname+B32 identities.
+Discovered results contain only normalized hostname, hostForm (`Friendly` or
+`ClassicBase32`), depth 1, `referrer` and `evidence`, ordered by hostname ordinally.
+Referrer is a structured `{ hostname, destinationHostname }` selected-known-seed
+identity; it contains no referring URL. Discovered results have no destination
+field or inferred B32 identity for friendly hosts.
+
+Both evidence shapes retain UTC times/duration, separate robots/homepage
+outcomes, origin evidence, classifications, robots observation, homepage
+attempt/disposition, bounded response metadata, page metadata and fixed error
+categories/details. There are no bodies, arbitrary headers or exception messages.
+Metrics retain total duration, outcome/classification dictionaries across both
+waves, homepage attempts/responses, unexpected failures and maximum active probes.
+
+The **entire artifact is private**, including destinations, identities, URLs,
+errors, proxy settings, timings and hashes. Existing scan/public schemas and
+their projection/viewer contracts are unchanged.
+
+## Bounds and strict installation
+
+The hard retained-evidence budget is 32 Mi UTF-16 characters across both waves:
+known/discovered identity text, referrers, titles, content types, URLs, redirects
+and errors. Exceeding it fails the whole run, without retaining a completion-order
+dependent subset. Existing per-response/title/link bounds remain unchanged.
+Artifact serialization and reading each cap at 128 MiB; JSON depth caps at 16.
+
+`I2pRawCrawlReader` requires strict UTF-8, exact required property sets at every
+level, unique properties, exact enum strings, schema/version, UTC time ordering,
+bounded values/settings and consistent counts. It reconstructs known semantic
+identities, revalidates discovered targets through Crawler 0, checks host forms,
+depths, unique ordering, selected referrer membership and the wave time barrier.
+It checks request/response/classification/homepage-gate consistency, metadata,
+canonical sanitized errors, aggregate evidence and all recomputable metrics.
+It never repairs, merges or sorts malformed input. Hashes are bounded provenance,
+not authentication. Without original bodies/full snapshot it cannot rerun robots
+parsing or prove the original frontier's reference count/full suppression set.
+
+`I2pRawCrawlFile` rejects snapshot/output collisions, filesystem links and known
+served-root components (`published`, `public`, `wwwroot`, `site`). It stages through
+exclusive `PrivateFile` creation (Unix 0600; inherited Windows directory ACLs),
+serializes within the byte cap, flushes to disk and closes. The strict reader
+validates the staged bytes before cancellation is checked and the final path is
+replaced. Validation, budget, I/O or cancellation failures before replacement
+preserve previous output and clean owned staging files. This is a same-filesystem
+per-file replacement, not a crash-proof transaction or multi-writer lock.
+
+## Pure frontier selection
 
 `I2pHostDiscovery.Select` receives a complete validated `I2pSeedSnapshot` and an
 immutable array of `I2pCrawlSeedObservation` pairs. These pairs explicitly identify
@@ -55,5 +159,5 @@ arrays, excess link counts, duplicate parents and out-of-snapshot parents fail
 explicitly. At most 2,500,000 references can be counted. URL and Content-Type
 length limits reuse 4096 and 256 characters. Retained selection state is O(K),
 in addition to bounded snapshot/parent identity indexes and caller-owned inputs.
-Cancellation is supported. There is no HTTP, DNS, socket, filesystem, environment
+Cancellation is supported. Within this selector there is no HTTP, DNS, socket, filesystem, environment
 or proxy lookup, and no task per candidate.

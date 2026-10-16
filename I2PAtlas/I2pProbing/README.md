@@ -147,9 +147,10 @@ by the configured proxy/router and is not claimed to be stable between requests.
 Metadata resolves relative URLs against the approved homepage descriptor:
 derived B32 for seeds, literal normalized hostname for host-only probes. The legacy
 metadata entry point remains an adapter; seeded title/link extraction and all
-bounds are unchanged. Discovered links remain inert. Existing commands and the
-snapshot-only scanner do not invoke the new discovered-host path; no frontier,
-scheduling, crawler CLI or persistence schema is introduced.
+bounds are unchanged. The snapshot-only scanner keeps links inert. The separate
+private `i2p-crawl` command uses this shared host-only path for admitted depth-1
+hosts; their links remain evidence and never become further work. See
+[crawling](../I2pCrawling/README.md) for orchestration and raw-crawl validation.
 
 ## Local proxy diagnostic
 

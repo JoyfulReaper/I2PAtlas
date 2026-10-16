@@ -70,28 +70,42 @@ dotnet run --project I2PAtlas -- i2p-project private/results/i2p-scan.json publi
 dotnet run --project I2PAtlas -- i2p-view published/i2p-latest.json published/i2p-index.html
 ```
 
-Only the diagnostic and scan perform networking. Import, projection and viewer
+The separate private one-hop crawl command uses the same proxy and probe policy:
+
+```text
+dotnet run --project I2PAtlas -- i2p-crawl private/i2p-seeds.json private/results/i2p-crawl.json http://127.0.0.1:4444 --max-discovered-hosts 100
+```
+
+Depth is fixed at 1. After selected seeds finish, a bounded deterministic frontier
+of unknown I2P hosts is probed once; depth-1 links remain evidence only. Discovered
+host observations are unauthenticated and depend on the proxy/router addressbook.
+Output is **private raw-crawl data**. There is no public crawl projection or
+viewer: `i2p-project` and `i2p-view` do not accept raw-crawl artifacts.
+
+Only the diagnostic, scan and crawl perform networking. Import, projection and viewer
 generation are local transformations. Generating public files does not deploy
 or serve them.
 
-The executable's help branding is `i2patlas`. It has exactly five commands:
+The executable's help branding is `i2patlas`. It has exactly six commands:
 
 | Command | Required arguments | Options |
 | --- | --- | --- |
 | `import-seeds` | addressbook file, private snapshot file | None |
 | `i2p-probe-test` | snapshot file, existing friendly hostname, proxy URI | `--timeout-ms`: 1–60000 |
 | `i2p-scan` | snapshot file, private output file, proxy URI | `--concurrency`: 1–4; `--timeout-ms`: 1–60000; `--max-seeds`: 1–10000 |
+| `i2p-crawl` | snapshot file, private output file, proxy URI | Scan option ranges plus `--max-discovered-hosts`: 0–1000; fixed depth 1 |
 | `i2p-project` | private raw file, public output file | None |
 | `i2p-view` | public input file, HTML output file | None |
 
 Scan defaults are concurrency **2**, **10000 ms per request**, and at most
 **10000 seeds**. `--max-seeds` takes a prefix in normalized hostname then
 preserved destination-text order after validating the entire snapshot.
-The diagnostic also defaults to 10000 ms per request.
+The crawl uses these same defaults plus **100 discovered hosts**; zero disables
+depth-1 requests. The diagnostic also defaults to 10000 ms per request.
 
 No arguments, `help`, `--help` or `-h` show usage and exit 0 without networking or
 file mutation. Unknown commands exit 2. Command-specific error/exit details are in
-the component documentation below. For `i2p-scan`, `i2p-project` and `i2p-view`,
+the component documentation below. For `i2p-scan`, `i2p-crawl`, `i2p-project` and `i2p-view`,
 Ctrl+C requests cancellation and returns 130 if cancellation is handled before
 final replacement.
 
@@ -136,6 +150,10 @@ operating-system DNS resolution, direct destination connection, friendly-name
 routing fallback or clearnet fallback. Requests use HTTP/1.1 on target port 80
 with User-Agent `I2PAtlas/0.1`. HTTPS and other target ports are unsupported.
 
+The separate crawler uses destination-derived B32 for known seeds and literal
+validated hostnames for discovered hosts. Friendly discovered hosts rely on the
+configured router's resolution; no imported destination is inferred for them.
+
 The probe requests `/robots.txt` first. It requests `/` only when:
 
 ```text
@@ -164,6 +182,7 @@ address-helper links are omitted from extraction.
 | --- | --- |
 | `i2patlas.seed-snapshot` v1 | **Private** validated seeds, import timestamp, source path and exact source-byte SHA-256/length |
 | `i2patlas.raw-scan` v1 | **Private** per-seed robots/homepage evidence, destinations, timings, proxy/settings and input provenance |
+| `i2patlas.raw-crawl` v1 | **Private** separate known-seed and terminal host-only evidence, structured parent identities, frontier counts and operational provenance |
 | `i2patlas.public-scan` v1 | Explicitly allowlisted friendly/B32 names, scan-level times, observations, bounded titles and discovered I2P hostnames |
 
 Keep seed/raw files outside every served directory. `/private/` is ignored by
@@ -203,8 +222,8 @@ the scanner's proxy configuration.
 - Proxy responses are unauthenticated; a proxy could imitate plausible robots.
 - Only target HTTP/80 is supported. Conservative robots handling skips some sites
   whose homepages might otherwise be useful to observe.
-- This is a bounded snapshot scanner, with no recursive crawler/frontier,
-  discovered-link scheduling or application retry loop.
+- `i2p-scan` stays snapshot-only. The separate private crawler stops at depth 1;
+  there is no deeper recursion, public crawl projection/viewer or application retry loop.
 - There is no scheduler, deployment package or hosting command.
 - Addressbook quality affects coverage, and friendly-name resolution can differ
   between addressbooks. Routing by B32 does not provide friendly-name virtual hosting.
@@ -219,6 +238,7 @@ the scanner's proxy configuration.
 - [Proxy-only transport](I2PAtlas/I2pTransport/README.md)
 - [Robots/homepage policy and diagnostic](I2PAtlas/I2pProbing/README.md)
 - [Bounded scanning and private raw artifacts](I2PAtlas/I2pScanning/README.md)
+- [Private one-hop crawling and strict raw-crawl validation](I2PAtlas/I2pCrawling/README.md)
 - [Strict raw validation and public projection](I2PAtlas/I2pPublishing/README.md)
 - [Public reader and standalone viewer](I2PAtlas/I2pReporting/README.md)
 

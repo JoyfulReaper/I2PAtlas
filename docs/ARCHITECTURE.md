@@ -1,7 +1,7 @@
 # I2PAtlas architecture
 
-I2PAtlas has five explicit CLI commands and a fixed snapshot-to-viewer pipeline.
-There is no discovery frontier, hosted service or deployment layer.
+I2PAtlas has six explicit CLI commands: a snapshot-to-viewer pipeline and a
+separate private one-hop crawl path. There is no hosted service or deployment layer.
 
 ```text
 local effective addressbook export
@@ -28,6 +28,11 @@ standalone HTML, static content plus optional JavaScript enhancement
 
 i2p-probe-test: strict seed loading -> one uniquely selected friendly name
                -> same probe/transport -> bounded private console report
+
+i2p-crawl: strict seed loading -> selected known-seed probe wave
+            -> pure bounded frontier selection using full snapshot suppression
+            -> terminal host-only probe wave -> private i2patlas.raw-crawl v1
+            (no public projection/viewer)
 ```
 
 ## Trust boundaries
@@ -42,8 +47,8 @@ robots response authenticates the response author. `I2pOriginEvidence` stays
 `NotObserved` without a usable response or `Unproven` with one.
 `I2pProxyResponseClassification` is a separate heuristic.
 
-Seed snapshots and raw scan artifacts are private operational data. The explicit
-public projection is the only path from private evidence into public JSON. The
+Seed snapshots and raw scan/crawl artifacts are private operational data. The explicit
+scan projection is the only path from private evidence into public JSON. The
 viewer accepts only the public model and encodes text again for HTML.
 No artifact's existence asserts origin authenticity.
 
@@ -164,8 +169,9 @@ including 200, remain ambiguous.
 Only HTTP 200 homepage bytes without Content-Encoding enter `I2pPageMetadata`
 for bounded title and link extraction. Relative references resolve against the
 approved B32 base; HTML base tags do not select another authority.
-Discovered URLs are inert metadata. No link is scheduled or followed;
-address-helper, credential-bearing, IP-literal and unsafe-scheme links are omitted.
+The probe retains URLs as metadata without following them; address-helper,
+credential-bearing, IP-literal and unsafe-scheme links are omitted. The separate
+crawler may admit only eligible host identities from depth-0 metadata.
 
 ## Bounded multi-seed scan and raw artifact
 
@@ -215,6 +221,52 @@ Selected resource limits:
 
 These are implementation limits, not configurable promises beyond the documented
 CLI options. Component READMEs describe additional per-field bounds.
+
+## Private one-hop crawl
+
+[I2pCrawling/](../I2PAtlas/I2pCrawling/README.md) owns the separate `i2p-crawl`
+command's service, settings, private raw model, staged writer and strict reader.
+It reads/hashes the seed snapshot exactly once, selects its sorted prefix, and
+uses one guarded transport and the shared Crawler 0 probe state machine.
+Known seeds remain destination-bound and independent, including alternate
+destinations for one friendly name.
+
+The fixed worker count is `min(concurrency, wave target count)`. All depth-0 work
+finishes before the unchanged pure Crawler 1a selector runs exactly once, using
+the complete snapshot for known friendly/B32 suppression. Only complete eligible
+HTTP-200 HTML/XHTML parents contribute. The lexically smallest K unknown hosts
+retain deterministic smallest known-parent provenance. A second bounded worker
+wave probes those host-only targets; depth 1 is terminal. Its links stay private
+evidence, never another frontier. No target DNS, application retries, direct
+connections or original discovered URL requests are added.
+
+Defaults are 2 workers, 10000 ms per request, 10000 seeds and 100 discovered hosts;
+CLI ranges are 1–4, 1–60000, 1–10000 and 0–1000 respectively. Zero host capacity
+disables depth-1 requests while preserving frontier counts. There is no depth
+option. Expected target failures remain observations; unexpected nonfatal probe
+exceptions retain sanitized unknown partial state. Infrastructure failure cancels
+siblings; cancellation/resource limits abort installation and preserve old output.
+
+`i2patlas.raw-crawl` v1 separates known results (hostname, preserved destination,
+derived B32, depth 0, evidence) from discovered results (hostname, HostForm,
+depth 1, structured selected-known-parent hostname+B32 referrer, evidence).
+Known order is hostname then preserved destination text; discovered order is
+hostname, all ordinal. Host-only results never acquire a destination or inferred
+identity. Friendly hosts depend on proxy/router resolution, and all response
+origin evidence remains unauthenticated. Top-level provenance/settings, seed and
+frontier counts, UTC times and metrics are private alongside every result field.
+
+The hard bounds are 32 Mi UTF-16 retained evidence characters and 128 MiB JSON,
+with existing per-response/page limits unchanged. `I2pRawCrawlReader` rejects
+unknown/duplicate/missing fields, unsupported schema/version, malformed identity,
+host form/depth/order/referrer mismatches, invalid times/settings/gates, inconsistent
+counts/metrics and excess evidence. It validates selected parent membership and
+the wave barrier without reopening source files or claiming origin proof.
+The private writer flushes and closes a bounded staged file, strictly validates
+its bytes, then checks cancellation and replaces the output. No partial final
+artifact is installed. Existing raw-scan/public-scan schemas stay unchanged;
+`i2p-project` and `i2p-view` reject raw-crawl artifacts. There is no public crawl
+projection or viewer yet.
 
 ## Strict raw reader and public projection
 
@@ -272,7 +324,7 @@ browser does not inherit the scan proxy setting.
 ## File installation, failures and cancellation
 
 All output paths are explicit and output directories must already exist.
-Import, projection and viewer generation perform no network access. Scan output
+Import, projection and viewer generation perform no network access. Scan/crawl output
 must be distinct from its snapshot and rejects known served-root path components
 (`published`, `public`, `wwwroot`, `site`); this cannot detect every served root.
 Seed and raw files must remain outside all served directories.
@@ -291,7 +343,7 @@ multi-file transaction, checkpoint system or cross-process lock. Strict path
 checks do not detect every hard-link alias or coordinate simultaneous writers.
 
 The scan cancels in-flight requests and stops workers on caller cancellation.
-`Program.cs` installs Ctrl+C handlers for scan, projection and viewer commands;
+`Program.cs` installs Ctrl+C handlers for scan, crawl, projection and viewer commands;
 they return 130 when cancellation is handled. Import/probe APIs accept cancellation
 tokens, but their CLI dispatch has no equivalent graceful Ctrl+C handler.
 
@@ -299,7 +351,8 @@ Help/no arguments exit 0 and unknown commands exit 2 before any work.
 Argument errors generally exit 2; input/I/O failures exit 1. Diagnostic exit 0
 means complete HTTP responses were observed in all attempted phases, even HTTP
 errors. Scan exit 0 means the private artifact was installed, even for empty or
-entirely failed seed observations. Consult component READMEs for exact contracts.
+entirely failed seed observations. Crawl exit 0 likewise means its private
+artifact was installed. Consult component READMEs for exact contracts.
 
 ## Validation and future work
 
@@ -310,5 +363,5 @@ replacement failures, projection privacy and viewer generation. Node tests cover
 the viewer's HTTP-200 default, filtering, sorting, navigation and stable identities.
 No automated test requires a real I2P router.
 
-Host-oriented discovery crawling is future work. No frontier, recursive fetching,
-scheduler or deployment package is implemented here.
+Crawling beyond depth 1 and public crawl projection/viewer integration remain
+future work. There is no scheduler or deployment package.

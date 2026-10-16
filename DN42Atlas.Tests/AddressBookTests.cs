@@ -146,7 +146,7 @@ public sealed class AddressBookTests
     }
 
     [TestMethod]
-    public void UnsupportedInlineMetadataAndExtraSeparatorsAreRejected()
+    public void InlineCommentsSubscriptionActionsAndExtraSeparatorsAreRejected()
     {
         foreach (var suffix in new[] { " # comment", " ; comment", "#!action=add", "=extra", "\\" })
             Assert.ThrowsExactly<AddressBookParseException>(() => Parse($"example.i2p={Destination}{suffix}"));

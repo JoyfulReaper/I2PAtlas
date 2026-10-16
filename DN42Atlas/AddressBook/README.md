@@ -7,14 +7,73 @@ This layer is not connected to the existing DN42 command/scanner pipeline.
 For the local CLI import and versioned private artifact boundary, see
 [private I2P seed snapshots](../Seeds/README.md).
 
-Each non-comment line must be `hostname.i2p=destination`. LF, CRLF and CR line
+Each non-comment line must be `hostname.i2p=destination`, optionally followed by
+structured SusiDNS export metadata as described below. LF, CRLF and CR line
 endings are accepted, including a final line without a newline. Blank lines and
 lines whose first non-space/tab character is `#` or `;` are ignored. Only ASCII
 spaces and tabs are removed around fields. Split at the first `=`: trailing `=`
-characters belong to Base64 padding. Inline comments, subscription commands,
+characters belong to Base64 padding. Arbitrary inline comments, subscription commands,
 continuations and escaped/property-file syntax are not supported and fail
 validation when appended to an entry. A leading BOM is accepted only at the
 start of input. Invalid UTF-8 fails explicitly.
+
+## Extended SusiDNS export entries
+
+SusiDNS's [export method](https://github.com/i2p/i2p.i2p/blob/master/apps/susidns/src/java/src/i2p/susi/dns/NamingServiceBean.java)
+delegates to the naming service. I2P's [HostTxtEntry writer/parser](https://github.com/i2p/i2p.i2p/blob/master/core/java/src/net/i2p/client/naming/HostTxtEntry.java)
+uses `name=destination#!key=value#key=value`, splitting each property at its first
+`=` and rejecting duplicate case-sensitive keys. The [subscription format](https://www.i2p.net/en/docs/specs/subscription/)
+also defines command actions; this local seed importer does not implement them.
+
+After removing ASCII spaces/tabs at the physical line's edges, the supported
+entry grammar is:
+
+```text
+entry      = hostname "=" destination [ "#!" properties ]
+properties = property *( "#" property )
+property   = key "=" value
+key        = ASCII-letter *( ASCII-letter / ASCII-digit / "_" / "-" / "." )
+value      = nonblank printable-ASCII text, excluding "#"
+```
+
+The first `=` separates the mapping; the first exact `#!` on its right separates
+the destination and metadata. Only the destination prefix is passed to the
+unchanged I2pSeed validator, with its existing surrounding-space/tab handling.
+There is no recovery to a later `#!` if the first block is malformed. A bare `#`,
+`# !`, `##!`, garbage before `#!`, empty block/pair/key/value, trailing separator,
+repeated block delimiter, duplicate key or invalid character fails explicitly.
+`#` is a property separator only inside a properly introduced metadata block,
+never an inline comment delimiter. Additional `=` characters belong to values,
+including signature padding. No property escape/quoting syntax is interpreted.
+
+Keys are case-sensitive and limited to 64 characters. Values are limited to
+2048 characters from U+0020 through U+007E, excluding `#`, and cannot consist
+only of spaces. Spaces inside values are retained; tabs, controls and non-ASCII
+metadata values are rejected by this bounded local-import profile. Whole-line
+edge spaces/tabs remain padding and are removed before parsing. Each block has
+at most 16 properties and at most 4096 characters after `#!`, including all keys,
+values and separators. Limits are inclusive and do not replace line/input limits.
+
+`date` and `sig` are retained as opaque strings: dates are not interpreted or
+used for expiry, and signatures are not cryptographically verified or treated as
+proof. Unknown keys follow the same bounded generic-retention rules. The exact
+reserved key `action` is rejected because subscription commands remain unsupported.
+Metadata called `hostname`, `dest` or similar never overrides the actual mapping.
+
+`AddressBookSnapshot.EntryMetadata` is a private, immutable array of per-line
+annotations (line number, normalized hostname, ordinally sorted immutable property
+map). Identical mapping duplicates still deduplicate as before; their annotations
+remain separate physical-line records rather than arbitrarily choosing metadata.
+Every duplicate's suffix is validated before deduplication. Different annotation
+values never resolve or hide destination conflicts. Total input size also bounds
+retained annotations, including duplicate entries.
+
+I2pSeed and the version-1 imported seed JSON contain no metadata fields. There is
+no current scan need to persist these annotations. The importer still hashes the
+exact original export bytes, including metadata, signature text, comments, BOM and
+line endings; it does not hash a reconstructed metadata-free addressbook. The
+regression fixture uses the observed `8ightball.i2p=...#!date=1790878952#sig=...`
+shape with synthetic keys/signature rather than a live router dependency.
 
 Hostnames are lowercased invariantly and one optional final dot is removed.
 The result must have at least one label before `.i2p`, at most 253 characters
@@ -56,6 +115,9 @@ Fixed limits bound both work and retained memory:
 | Total decoded input | 16,777,216 UTF-16 characters | Bounds the whole import, including comments, duplicate lines, BOM and line endings |
 | Physical line (excluding CR/LF) | 16,384 characters | Checked while reading, before allocating an unbounded line, including comments/whitespace |
 | Destination after edge whitespace removal | 8,192 characters | Allows variable certificate/key sizes well beyond common destinations while rejecting absurd values |
+| Metadata suffix after `#!` | 4,096 characters | Bounds a complete property block before allocating its map |
+| Metadata properties per line | 16 | Bounds generic annotation count; duplicate keys reject |
+| Metadata key / value | 64 / 2,048 characters | Bounds each retained annotation |
 | Unique normalized hostnames | 10,000 | Bounds collection overhead; identical duplicates still count toward total input |
 | Source label | 1,024 characters, no controls | Bounded provenance and diagnostics |
 

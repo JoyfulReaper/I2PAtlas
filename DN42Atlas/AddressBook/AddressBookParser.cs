@@ -11,6 +11,10 @@ public static class AddressBookParser
     public const int MaxDestinationCharacters = 8 * 1024;
     public const int MaxSeeds = 10_000;
     public const int MaxSourceCharacters = 1024;
+    public const int MaxMetadataCharacters = 4096; // suffix after #!, including separators
+    public const int MaxMetadataProperties = 16;
+    public const int MaxMetadataKeyCharacters = 64;
+    public const int MaxMetadataValueCharacters = 2048;
 
     public static AddressBookSnapshot ParseFile(string path)
     {
@@ -28,6 +32,7 @@ public static class AddressBookParser
         ArgumentNullException.ThrowIfNull(reader);
         ValidateSource(source);
         var seeds = ImmutableArray.CreateBuilder<I2pSeed>();
+        var entryMetadata = ImmutableArray.CreateBuilder<AddressBookEntryMetadata>();
         var byHost = new Dictionary<string, I2pSeed>(StringComparer.Ordinal);
         var buffer = new char[MaxLineCharacters];
         var length = 0;
@@ -60,7 +65,7 @@ public static class AddressBookParser
             buffer[length++] = c;
         }
         if (length > 0) AddLine();
-        return new AddressBookSnapshot(source, seeds.ToImmutable());
+        return new AddressBookSnapshot(source, seeds.ToImmutable(), entryMetadata.ToImmutable());
 
         AddressBookParseException Error(string reason) => new(source, lineNumber, reason);
 
@@ -71,9 +76,23 @@ public static class AddressBookParser
             var equals = line.IndexOf('=');
             if (equals < 0) throw Error("Expected hostname=destination.");
 
+            var destination = line[(equals + 1)..];
+            var delimiter = destination.IndexOf("#!", StringComparison.Ordinal);
+            var metadata = ImmutableSortedDictionary<string, string>.Empty;
+            if (delimiter >= 0)
+            {
+                // The first exact delimiter is authoritative: never skip a malformed
+                // block to find a later one, and never strip arbitrary # comments.
+                metadata = ParseMetadata(destination[(delimiter + 2)..]);
+                destination = destination[..delimiter];
+            }
+
             I2pSeed seed;
-            try { seed = new I2pSeed(line[..equals].ToString(), line[(equals + 1)..].ToString()); }
+            try { seed = new I2pSeed(line[..equals].ToString(), destination.ToString()); }
             catch (FormatException ex) { throw Error(ex.Message); }
+
+            if (!metadata.IsEmpty)
+                entryMetadata.Add(new(lineNumber, seed.Hostname, metadata));
 
             if (byHost.TryGetValue(seed.Hostname, out var previous))
             {
@@ -84,6 +103,39 @@ public static class AddressBookParser
             if (seeds.Count == MaxSeeds) throw Error($"Addressbook exceeds {MaxSeeds} unique seeds.");
             byHost.Add(seed.Hostname, seed);
             seeds.Add(seed);
+        }
+
+        ImmutableSortedDictionary<string, string> ParseMetadata(ReadOnlySpan<char> suffix)
+        {
+            if (suffix.IsEmpty || suffix.Length > MaxMetadataCharacters)
+                throw Error($"Metadata must contain 1 to {MaxMetadataCharacters} characters after #!.");
+            var properties = ImmutableSortedDictionary.CreateBuilder<string, string>(StringComparer.Ordinal);
+            foreach (var range in suffix.Split('#'))
+            {
+                if (properties.Count == MaxMetadataProperties)
+                    throw Error($"Metadata exceeds {MaxMetadataProperties} properties.");
+                var pair = suffix[range];
+                var equals = pair.IndexOf('=');
+                if (equals <= 0 || equals == pair.Length - 1)
+                    throw Error("Metadata requires nonempty key=value pairs separated by #.");
+                var key = pair[..equals];
+                var value = pair[(equals + 1)..];
+                if (key.Length > MaxMetadataKeyCharacters || !char.IsAsciiLetter(key[0]))
+                    throw Error("Metadata key must start with an ASCII letter and fit the key limit.");
+                foreach (var c in key)
+                    if (!char.IsAsciiLetterOrDigit(c) && c is not '_' and not '-' and not '.')
+                        throw Error("Metadata key contains an invalid character.");
+                if (value.Length > MaxMetadataValueCharacters || value.IsWhiteSpace())
+                    throw Error($"Metadata value must be nonblank and at most {MaxMetadataValueCharacters} characters.");
+                foreach (var c in value)
+                    if (c is < ' ' or > '~')
+                        throw Error("Metadata values must contain printable ASCII characters.");
+                if (key.SequenceEqual("action"))
+                    throw Error("Subscription action metadata is not supported in local seed imports.");
+                if (!properties.TryAdd(key.ToString(), value.ToString()))
+                    throw Error("Duplicate metadata key.");
+            }
+            return properties.ToImmutable();
         }
     }
 

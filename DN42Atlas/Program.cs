@@ -11,7 +11,7 @@ if (command is "--help" or "-h" or "help")
     return 0;
 }
 
-if (command is not ("resolve" or "web-scan" or "report" or "probe-test" or "run" or "registry-update" or "republish" or "publish-existing" or "import-seeds" or "i2p-probe-test" or "i2p-scan" or "i2p-project"))
+if (command is not ("resolve" or "web-scan" or "report" or "probe-test" or "run" or "registry-update" or "republish" or "publish-existing" or "import-seeds" or "i2p-probe-test" or "i2p-scan" or "i2p-project" or "i2p-view"))
 {
     CommandUsage.Print();
     return 2;
@@ -19,6 +19,16 @@ if (command is not ("resolve" or "web-scan" or "report" or "probe-test" or "run"
 
 try
 {
+    // Public-only reporting must not initialize private I2P or DN42 services.
+    if (command == "i2p-view")
+    {
+        using var cancellation = new CancellationTokenSource();
+        ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
+        Console.CancelKeyPress += cancel;
+        try { return await I2pViewCommand.ExecuteAsync(args, cancellationToken: cancellation.Token); }
+        finally { Console.CancelKeyPress -= cancel; }
+    }
+
     // Pure local I2P input transformation needs no DN42 policy, lock, registry or scanner.
     if (command == "import-seeds")
         return await ImportSeedsCommand.ExecuteAsync(args);

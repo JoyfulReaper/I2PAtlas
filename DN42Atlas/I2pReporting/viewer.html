@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="data:,">
+<title>I2PAtlas</title>
+<style>
+:root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.js-pending body { visibility: hidden; }
+.js-pending .service-detail { display: none; }
+html { scroll-padding-top: var(--controls-offset, 0px); }
+body { margin: 0; background: #0d1117; color: #c9d1d9; }
+header { background: #161b22; border-bottom: 1px solid #30363d; padding: 1rem 1.5rem; }
+h1 { margin: 0; font-size: 1.5rem; color: #c4b5fd; }
+h2 { font-size: 1.15rem; } h3 { font-size: 1.1rem; } h4 { margin-bottom: .6rem; }
+main { max-width: 1500px; margin: auto; padding: 1.5rem; }
+a { color: #a5b4fc; } .muted, .times, .counter, .stat span { color: #9da7b3; }
+.notice { color: #e3bd75; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .7rem; }
+.stat, .card { border: 1px solid #30363d; border-radius: 8px; background: #161b22; padding: 1rem; }
+.stat strong { display: block; font-size: 1.5rem; color: #c4b5fd; } .stat span { font-size: .8rem; }
+.times, .controls { display: flex; flex-wrap: wrap; gap: .6rem 1rem; }
+.times { font-size: .85rem; }
+.controls { align-items: center; padding: .7rem 0; margin: .6rem 0 1rem; background: #0d1117; border-bottom: 1px solid #30363d; }
+.controls.is-sticky { position: sticky; top: 0; z-index: 3; }
+.controls label { display: flex; align-items: center; gap: .4rem; max-width: 100%; min-width: 0; }
+.search-label { flex: 1 1 280px; }
+button, input, select { font: inherit; border: 1px solid #49515c; border-radius: 5px; background: #21262d; color: #e0e5ed; padding: .5rem; min-width: 0; }
+input { width: 100%; } button, summary { cursor: pointer; }
+button:hover { background: #30363d; } button:disabled { opacity: .5; cursor: default; }
+:focus-visible { outline: 2px solid #c4b5fd; outline-offset: 3px; }
+.shortcut-hint, .counter, #copy-status { font-size: .8rem; } kbd { font: inherit; }
+.copy-fallback { flex-basis: 100%; }
+.atlas { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem; align-items: start; }
+.directory { min-width: 0; } .table-scroll { overflow: auto; max-height: 68vh; }
+table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+caption { text-align: left; padding: 0 0 .7rem; color: #9da7b3; }
+th, td { padding: .65rem .5rem; border-bottom: 1px solid #30363d; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+th[scope="row"] { font-weight: normal; }
+thead th { position: sticky; top: 0; background: #161b22; z-index: 1; }
+thead th:nth-child(1) { width: 24%; } thead th:nth-child(2) { width: 23%; }
+thead th:nth-child(3) { width: 24%; } thead th:nth-child(4) { width: 13%; } thead th:nth-child(5) { width: 16%; }
+.sort-button { background: transparent; text-align: left; width: 100%; font-weight: bold; }
+.sort-button:disabled { opacity: 1; } .cell-label { display: none; }
+tr.selectable { cursor: pointer; } tr.selectable:hover:not(.selected) { background: #242637; }
+tr.selected { background: #302b46; box-shadow: inset 3px 0 #c4b5fd; }
+.badge { display: inline-block; padding: .2rem .4rem; margin-top: .3rem; border: 1px solid #74678d; border-radius: 5px; font-size: .75rem; color: #ddd1f2; }
+.service-detail { margin-bottom: 1rem; scroll-margin-top: 1rem; }
+.service-detail:target { border-color: #c4b5fd; }
+p, dd, li, h3 { overflow-wrap: anywhere; }
+dl { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: .5rem; font-size: .85rem; }
+dt { color: #9da7b3; } dd { margin: 0; }
+ul { padding-left: 1.3rem; } li { margin: .45rem 0; }
+.discovered-hosts { margin-top: 1rem; } details { margin: .8rem 0; } summary { font-weight: bold; }
+footer { margin: 1.5rem 0 0; font-size: .85rem; }
+@media (max-width: 900px) { .atlas { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) {
+    main, header { padding: 1rem; } .card { padding: .75rem; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .controls label { flex-wrap: wrap; } .controls select { max-width: 100%; }
+    .directory table, .directory caption, .directory thead, .directory tbody { display: block; }
+    .directory thead { position: sticky; top: 0; z-index: 1; padding: .4rem 0; background: #161b22; }
+    .directory thead tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; }
+    .directory thead th { position: static; width: auto; min-width: 0; padding: 0; border: 0; }
+    .directory .sort-button { min-height: 44px; height: 100%; }
+    .directory tbody { display: grid; gap: .65rem; }
+    .directory tbody tr { display: grid; min-width: 0; border: 1px solid #49515c; border-radius: 6px; padding: .4rem; }
+    .directory tbody th, .directory tbody td { display: block; padding: .35rem .4rem; border: 0; }
+    .cell-label { display: block; color: #9da7b3; font-size: .75rem; margin-bottom: .2rem; }
+    .directory th .cell-value a { display: inline-flex; align-items: center; min-height: 44px; }
+    .directory .table-scroll { scroll-padding-top: 12rem; }
+    dl { grid-template-columns: minmax(0, 1fr); } dd { margin-bottom: .4rem; }
+}
+</style>
+<script>
+(() => {
+    const root = document.documentElement;
+    const initialHash = location.hash;
+    document.addEventListener('DOMContentLoaded', () => {
+        try { initialize(); }
+        catch (error) {
+            for (const item of document.querySelectorAll('#services tr, .service-detail')) item.hidden = false;
+            document.getElementById('controls').hidden = true;
+            document.getElementById('no-matches').hidden = true;
+            document.getElementById('no-selection').hidden = true;
+            for (const row of document.querySelectorAll('#services tr')) row.classList.remove('selectable', 'selected');
+            for (const link of document.querySelectorAll('#services a')) link.removeAttribute('aria-current');
+            for (const button of document.querySelectorAll('.sort-button')) button.disabled = true;
+            console.error('I2PAtlas enhancement failed; showing the static directory.', error);
+        } finally {
+            root.classList.remove('js-pending');
+            if (initialHash) {
+                history.replaceState(history.state, '', initialHash);
+                let id;
+                try { id = decodeURIComponent(initialHash.slice(1)); } catch { /* Malformed fragments remain inert. */ }
+                document.getElementById(id)?.scrollIntoView({ block: 'start' });
+            }
+        }
+    }, { once: true });
+    if (initialHash) history.replaceState(history.state, '', location.pathname + location.search);
+    root.classList.add('js-pending');
+
+    function initialize() {
+        const body = document.getElementById('services');
+        const rows = Array.from(document.querySelectorAll('#services tr'));
+        const panels = Array.from(document.querySelectorAll('.service-detail'));
+        const byId = new Map(rows.map(row => [row.dataset.service, row]));
+        const search = document.getElementById('search');
+        const state = document.getElementById('state');
+        const robots = document.getElementById('robots');
+        const discovery = document.getElementById('discovery');
+        const filters = [search, state, robots, discovery];
+        const headers = Array.from(document.querySelectorAll('th[data-sort]'));
+        const controls = document.getElementById('controls');
+        const previous = document.getElementById('previous');
+        const next = document.getElementById('next');
+        const random = document.getElementById('random');
+        const copy = document.getElementById('copy-link');
+        const copyStatus = document.getElementById('copy-status');
+        const copyFallback = document.getElementById('copy-fallback');
+        let filtered = rows;
+        let selected = null;
+        let sortKey = 'hostname';
+        let direction = 1;
+        let applied;
+        let copyRequest = 0;
+        let copyTimer;
+
+        const ordinal = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+        function sortRows() {
+            rows.sort((a, b) => {
+                const av = a.dataset[sortKey], bv = b.dataset[sortKey];
+                const compared = sortKey === 'http' || sortKey === 'discovered'
+                    ? (av === '' ? 1000 : Number(av)) - (bv === '' ? 1000 : Number(bv))
+                    : ordinal(av.toLowerCase(), bv.toLowerCase());
+                return compared * direction || ordinal(a.dataset.identity, b.dataset.identity);
+            });
+            for (const row of rows) body.appendChild(row);
+            for (const header of headers) {
+                const active = header.dataset.sort === sortKey;
+                if (active) header.setAttribute('aria-sort', direction === 1 ? 'ascending' : 'descending');
+                else header.removeAttribute('aria-sort');
+                header.querySelector('.sort-indicator').textContent = active ? direction === 1 ? '↑' : '↓' : '↕';
+                header.querySelector('button').setAttribute('aria-label', header.dataset.label + ': sort ' +
+                    (active && direction === 1 ? 'descending' : 'ascending'));
+            }
+        }
+        function discoveryMatches(row) {
+            switch (discovery.value) {
+                case 'title': return row.dataset.hasTitle === 'true';
+                case 'hosts': return Number(row.dataset.discovered) > 0;
+                case 'multiple': return row.dataset.multiple === 'true';
+                case 'incomplete': return row.dataset.incomplete === 'true';
+                default: return true;
+            }
+        }
+        function matches() {
+            const query = search.value.trim().toLowerCase();
+            return rows.filter(row => row.dataset.search.includes(query) &&
+                (!state.value || row.dataset.state === state.value) &&
+                (!robots.value || row.dataset.robots === robots.value) && discoveryMatches(row));
+        }
+        function remember() { applied = filters.map(control => control.value); }
+        function restore() { filters.forEach((control, i) => { control.value = applied[i]; }); }
+        function render() {
+            const visible = new Set(filtered);
+            for (const row of rows) {
+                row.hidden = !visible.has(row);
+                const active = row.dataset.service === selected;
+                row.classList.add('selectable');
+                row.classList.toggle('selected', active);
+                const link = row.querySelector('a');
+                if (active) link.setAttribute('aria-current', 'true');
+                else link.removeAttribute('aria-current');
+            }
+            for (const panel of panels) panel.hidden = panel.id !== selected;
+            const index = filtered.findIndex(row => row.dataset.service === selected);
+            document.getElementById('counter').textContent = (index + 1) + ' / ' + filtered.length + ' matching · ' + rows.length + ' total';
+            document.getElementById('directory-count').textContent = filtered.length + ' of ' + rows.length + ' public destination entries';
+            document.getElementById('no-matches').hidden = filtered.length !== 0;
+            document.getElementById('no-selection').hidden = selected !== null;
+            for (const button of [previous, next, random]) button.disabled = filtered.length === 0;
+            copy.disabled = selected === null;
+        }
+        function select(id, updateHash = true, replace = false) {
+            ++copyRequest;
+            clearTimeout(copyTimer);
+            copyStatus.textContent = '';
+            copyFallback.hidden = true;
+            selected = byId.has(id) ? id : null;
+            render();
+            if (updateHash && selected && location.hash !== '#' + selected) {
+                if (replace) history.replaceState(null, '', '#' + selected);
+                else history.pushState(null, '', '#' + selected);
+            }
+        }
+        function applyFilter(updateHash = true) {
+            filtered = matches();
+            remember();
+            select(filtered.some(row => row.dataset.service === selected) ? selected : filtered[0]?.dataset.service, updateHash, true);
+        }
+        function reveal(id, updateHash = false) {
+            const row = byId.get(id);
+            if (!row) return false;
+            if (!row.dataset.search.includes(search.value.trim().toLowerCase())) search.value = '';
+            if (state.value && state.value !== row.dataset.state) state.value = '';
+            if (robots.value && robots.value !== row.dataset.robots) robots.value = '';
+            if (!discoveryMatches(row)) discovery.value = '';
+            filtered = matches();
+            remember();
+            select(id, updateHash);
+            return true;
+        }
+        function fromHash(hash = location.hash) {
+            try { return reveal(decodeURIComponent(hash.slice(1))); } catch { return false; }
+        }
+        function historyNavigation() {
+            restore();
+            fromHash();
+            requestAnimationFrame(restore);
+        }
+        function move(offset) {
+            if (!filtered.length) return;
+            const index = filtered.findIndex(row => row.dataset.service === selected);
+            select(filtered[(index + offset + filtered.length) % filtered.length].dataset.service);
+        }
+        function sticky() {
+            const height = controls.getBoundingClientRect().height;
+            const enabled = window.innerWidth > 900 && height <= window.innerHeight / 3;
+            controls.classList.toggle('is-sticky', enabled);
+            root.style.setProperty('--controls-offset', enabled ? (height + 16) + 'px' : '0px');
+        }
+        previous.addEventListener('click', () => move(-1));
+        next.addEventListener('click', () => move(1));
+        random.addEventListener('click', () => {
+            if (filtered.length) select(filtered[Math.floor(Math.random() * filtered.length)].dataset.service);
+        });
+        search.addEventListener('input', () => applyFilter());
+        for (const filter of [state, robots, discovery]) filter.addEventListener('change', () => applyFilter());
+        document.getElementById('reset').addEventListener('click', () => {
+            for (const control of filters) control.value = '';
+            applyFilter();
+        });
+        for (const header of headers) {
+            const button = header.querySelector('button');
+            button.disabled = false;
+            button.addEventListener('click', () => {
+                direction = sortKey === header.dataset.sort ? -direction : 1;
+                sortKey = header.dataset.sort;
+                sortRows();
+                applyFilter(false);
+            });
+        }
+        copy.addEventListener('click', async () => {
+            if (!selected) return;
+            const request = ++copyRequest;
+            const url = new URL(location.href);
+            url.hash = selected;
+            clearTimeout(copyTimer);
+            copyStatus.textContent = '';
+            copyFallback.hidden = true;
+            try {
+                await navigator.clipboard.writeText(url.href);
+                if (request !== copyRequest) return;
+                copyStatus.textContent = 'Copied';
+                copyTimer = setTimeout(() => { copyStatus.textContent = ''; }, 2500);
+            } catch {
+                if (request !== copyRequest) return;
+                const input = document.getElementById('copy-url');
+                input.value = url.href;
+                copyFallback.hidden = false;
+                copyStatus.textContent = 'Select and copy the link below.';
+                input.focus();
+                input.select();
+            }
+        });
+        body.addEventListener('click', event => {
+            if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            const row = event.target.closest('tr[data-service]');
+            if (!row || row.hidden || !byId.has(row.dataset.service) ||
+                event.target.closest('a, button, input, select, textarea, summary, details, label, [contenteditable], [role="button"], [role="link"]')) return;
+            reveal(row.dataset.service, true);
+        });
+        document.addEventListener('click', event => {
+            const link = event.target.closest('a[href^="#i2p-service-"]');
+            if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            const id = link.getAttribute('href').slice(1);
+            if (!byId.has(id)) return;
+            event.preventDefault();
+            reveal(id, true);
+            // Explicit detail links expose the target to keyboard users; browse buttons retain focus/viewport.
+            document.getElementById(id).focus({ preventScroll: true });
+            document.getElementById(id).scrollIntoView({ block: 'nearest' });
+        });
+        document.addEventListener('keydown', event => {
+            if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.target.isContentEditable ||
+                event.target.closest('input, select, textarea, button, a, summary')) return;
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                event.preventDefault();
+                move(event.key === 'ArrowLeft' ? -1 : 1);
+            }
+            if (event.key === 'r' || event.key === 'R') random.click();
+        });
+        window.addEventListener('popstate', historyNavigation);
+        window.addEventListener('hashchange', historyNavigation);
+        window.addEventListener('pageshow', () => { restore(); requestAnimationFrame(restore); });
+        // Fresh documents start with Any filters; browser-restored form state is not filter persistence.
+        for (const control of filters) control.value = '';
+        sortRows();
+        applyFilter(false);
+        fromHash(initialHash);
+        if (!initialHash) window.addEventListener('load', () => {
+            // Record selection after native initial-fragment positioning has finished.
+            requestAnimationFrame(() => {
+                if (selected && !location.hash) history.replaceState(null, '', '#' + selected);
+            });
+        }, { once: true });
+        controls.hidden = false;
+        sticky();
+        window.addEventListener('resize', sticky);
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(sticky).observe(controls);
+    }
+})();
+</script>
+</head>
+<body>
+<header>
+<h1>I2PAtlas</h1>
+<p>I2PAtlas records bounded HTTP observations made through an I2P proxy.
+Responses are observations, not authenticated proof of origin or liveness.</p>
+<p class="muted">Multiple destinations are listed equally as separate entries.</p>
+</header>
+<main>
+<section class="stats" aria-label="Public scan summary">{{stats}}</section>
+<div class="times">{{times}}</div>
+<div class="controls" id="controls" hidden>
+<button id="previous" type="button">← Previous</button><button id="random" type="button">Random</button><button id="next" type="button">Next →</button>
+<span class="muted shortcut-hint">Keys: <kbd>←</kbd> previous · <kbd>→</kbd> next · <kbd>R</kbd> random (outside controls)</span>
+<button id="copy-link" type="button" disabled>Copy link</button>
+<span id="copy-status" role="status" aria-live="polite" aria-atomic="true"></span>
+<label id="copy-fallback" class="copy-fallback" for="copy-url" hidden>Service link <input id="copy-url" type="text" readonly></label>
+<label class="search-label" for="search">Search <input id="search" type="search" placeholder="Hostname, B32, title, type, discovered host"></label>
+<label for="state">Summary state <select id="state"><option value="">Any</option>{{states}}</select></label>
+<label for="robots">Robots observation <select id="robots"><option value="">Any</option>{{robots}}</select></label>
+<label for="discovery">Discovery <select id="discovery"><option value="">Any</option><option value="title">Has title</option><option value="hosts">Has discovered I2P hosts</option><option value="multiple">Multi-destination hostname</option><option value="incomplete">Link extraction incomplete</option></select></label>
+<button id="reset" type="button">Reset filters</button><span id="counter" class="counter" role="status" aria-live="polite"></span>
+</div>
+<noscript><p>The complete directory and all detail sections are shown. Hostname links navigate to details.</p></noscript>
+<div class="atlas">
+<section class="card directory" id="directory" aria-labelledby="directory-title">
+<h2 id="directory-title">Destination directory</h2>
+{{empty}}
+<div class="table-scroll" tabindex="0" role="region" aria-label="Public I2P destination directory">
+<table role="table">
+<caption id="directory-count">All public destination entries. Select a hostname for details.</caption>
+<thead role="rowgroup"><tr role="row">
+<th scope="col" role="columnheader" id="column-hostname" data-sort="hostname" data-label="Hostname"><button class="sort-button" type="button" disabled>Hostname <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+<th scope="col" role="columnheader" id="column-title" data-sort="title" data-label="Title"><button class="sort-button" type="button" disabled>Title <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+<th scope="col" role="columnheader" id="column-state" data-sort="state" data-label="State"><button class="sort-button" type="button" disabled>State <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+<th scope="col" role="columnheader" id="column-http" data-sort="http" data-label="Homepage HTTP status"><button class="sort-button" type="button" disabled>HTTP <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+<th scope="col" role="columnheader" id="column-discovered" data-sort="discovered" data-label="Discovered-host count"><button class="sort-button" type="button" disabled>Discovered <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+</tr></thead>
+<tbody id="services" role="rowgroup">{{rows}}</tbody>
+</table>
+</div>
+<p id="no-matches" hidden>No matching entries. Change or reset the filters.</p>
+</section>
+<section id="viewer" aria-label="Destination details"><h2>Destination details</h2>
+<p id="no-selection" hidden>No destination entry selected.</p>{{details}}
+</section>
+</div>
+<section class="card discovered-hosts" aria-labelledby="discovered-title">
+<h2 id="discovered-title">Discovered I2P hostnames</h2>
+<p class="muted">Outside-seed references are discovery observations; they do not imply that Atlas scanned those hosts.</p>
+{{hosts}}
+</section>
+<footer class="muted">Links open only when activated. Friendly-name resolution depends on your I2P addressbook; destination links require an I2P-enabled browser. Atlas does not automatically fetch discovered hosts.</footer>
+</main>
+</body>
+</html>

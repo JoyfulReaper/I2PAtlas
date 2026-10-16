@@ -6,7 +6,7 @@ using I2PAtlas.Robots;
 
 namespace I2PAtlas.I2pProbing;
 
-/// <summary>One seed: robots, then optionally root, through a caller-owned I2P transport only.</summary>
+/// <summary>Robots, then optionally root, through a caller-owned I2P transport only.</summary>
 public sealed class I2pHttpProbe
 {
     public const string CrawlerProduct = "I2PAtlas";
@@ -30,12 +30,25 @@ public sealed class I2pHttpProbe
             return new(null, null, I2pRequestOutcome.RejectedBeforeNetworking, I2pOriginEvidence.NotObserved,
                 I2pProxyResponseClassification.Ambiguous, null, I2pRobotsObservation.NotObserved, I2pHomepageDisposition.SkippedRequestRejected);
 
-        // Both URI and Host are bound to this seed's destination by the existing transport.
-        var target = new I2pHttpRequestTarget(seed, $"http://{seed.Hostname}/robots.txt");
-        I2pProbeResult result;
+        var target = new I2pProbeTarget.KnownSeed(seed);
+        var observation = await ProbeTargetAsync(target, cancellationToken);
+        return new(seed, target.DestinationHostname, observation.RequestOutcome, observation.OriginEvidence,
+            observation.ProxyResponseClassification, observation.RobotsResponse, observation.Robots, observation.Homepage,
+            observation.HomepageRequestOutcome, observation.HomepageResponse, observation.HomepageMetadata,
+            observation.HomepageProxyResponseClassification);
+    }
+
+    // One state machine for both closed target variants. Host-only responses
+    // remain unproven proxy observations, with no inferred destination identity.
+    internal async Task<I2pProbeObservation> ProbeTargetAsync(I2pProbeTarget target, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(target);
+        var request = new I2pProbeRequest(target, ProbeResource.Robots);
+        I2pProbeObservation result;
         try
         {
-            using var response = await transport.GetAsync(target, UserAgent, cancellationToken);
+            using var response = await transport.GetAsync(request, cancellationToken);
             var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken); // already capped by transport
             cancellationToken.ThrowIfCancellationRequested();
             var observation = ObserveResponse(response, bytes.Length);
@@ -50,7 +63,7 @@ public sealed class I2pHttpProbe
                     I2pRobotsObservation.AllowsRoot => I2pHomepageDisposition.SkippedAmbiguousResponse,
                     _ => I2pHomepageDisposition.SkippedRobotsUnknown
                 };
-            result = new(seed, target.DestinationHostname, I2pRequestOutcome.ProxyHttpResponse,
+            result = new(I2pRequestOutcome.ProxyHttpResponse,
                 I2pOriginEvidence.Unproven, classification, observation, robots, homepage);
         }
         catch (TimeoutException)
@@ -70,18 +83,18 @@ public sealed class I2pHttpProbe
             result.Robots != I2pRobotsObservation.AllowsRoot) return result;
 
         // This is an explicit heuristic authorization, not a promotion of Unproven.
-        return await ProbeHomepageAsync(result, new I2pHttpRequestTarget(seed, $"http://{seed.Hostname}/"), cancellationToken);
+        return await ProbeHomepageAsync(result, new I2pProbeRequest(target, ProbeResource.Root), cancellationToken);
 
-        I2pProbeResult Failed(I2pRequestOutcome outcome) => new(seed, target.DestinationHostname, outcome,
+        I2pProbeObservation Failed(I2pRequestOutcome outcome) => new(outcome,
             I2pOriginEvidence.NotObserved, I2pProxyResponseClassification.Ambiguous, null, I2pRobotsObservation.NotObserved,
             I2pHomepageDisposition.SkippedRequestFailed);
     }
 
-    private async Task<I2pProbeResult> ProbeHomepageAsync(I2pProbeResult robots, I2pHttpRequestTarget target, CancellationToken token)
+    private async Task<I2pProbeObservation> ProbeHomepageAsync(I2pProbeObservation robots, I2pProbeRequest target, CancellationToken token)
     {
         try
         {
-            using var response = await transport.GetAsync(target, UserAgent, token);
+            using var response = await transport.GetAsync(target, token);
             var bytes = await response.Content.ReadAsByteArrayAsync(token);
             token.ThrowIfCancellationRequested();
             var observation = ObserveResponse(response, bytes.Length);
@@ -109,7 +122,7 @@ public sealed class I2pHttpProbe
             return Failed(FailureOutcome(ex));
         }
 
-        I2pProbeResult Failed(I2pRequestOutcome outcome) => robots with
+        I2pProbeObservation Failed(I2pRequestOutcome outcome) => robots with
         {
             Homepage = I2pHomepageDisposition.RequestFailed,
             HomepageRequestOutcome = outcome

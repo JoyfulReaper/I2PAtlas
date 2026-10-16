@@ -26,6 +26,46 @@ URL length is capped at 4096 characters. The model has only getters, an immutabl
 seed and an immutable URI. Callers cannot override Host, headers, methods or the
 underlying HttpClient/handler.
 
+## Internal host-only probe foundation
+
+Existing commands still use destination-bound seeds. There is no discovery
+frontier or crawler command. Internal `I2pProbeTarget` has only two closed variants:
+`KnownSeed` retains its validated seed and destination-derived B32, while
+`DiscoveredHost` contains only a normalized hostname and `Friendly` or
+`ClassicBase32` host form. It has no Base64 destination or inferred destination
+identity. Neither target contains crawl depth or provenance.
+
+Discovered friendly names use the existing ASCII LDH `.i2p` validation: at most
+253 characters, labels of 1–63 characters, lowercase normalization, one optional
+trailing dot, and surrounding ASCII spaces/tabs. URL syntax, IP literals,
+localhost/non-`.i2p` names, ports, userinfo, paths, queries and fragments reject.
+`proxy.i2p`, `router.i2p`, `console.i2p` and their subdomains reject as a narrow
+routing-safety rule; this does not change known-seed validation or add operator exclusions.
+
+Names under `.b32.i2p` must have exactly one 52-character hash label using
+`a-z2-7`, with zero trailing unused bits (last character `a` or `q`). Bare
+`b32.i2p`, malformed hashes, extra labels and extended/encrypted-lease-set forms
+(56+ encoded characters) reject; none falls back to friendly routing.
+
+Internal immutable `I2pProbeRequest` constructs its URI and Host together from
+one validated target and `ProbeResource.Robots` or `ProbeResource.Root`. No path
+or headers can be supplied. Known targets use derived B32; host-only targets use
+the literal normalized hostname. For example:
+
+```text
+GET http://foo.i2p/robots.txt HTTP/1.1
+Host: foo.i2p
+```
+
+The only other probe resource is `/`. Typed transport support is internal, always
+uses the fixed probe User-Agent, and shares the existing private send path and
+unchanged guarded proxy connection path. The public seed-bound `GetAsync` API
+remains available with its existing behavior.
+
+Host-only responses are unauthenticated proxy/router-routed observations. The
+proxy may resolve the same friendly hostname differently between requests;
+robots and homepage are not claimed to be pinned to one destination.
+
 ## Destination binding
 
 Routing uses `base32lower(SHA256(binary destination)) + .b32.i2p`, with 52 Base32

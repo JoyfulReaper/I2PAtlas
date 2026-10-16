@@ -130,6 +130,27 @@ generic origin-authentication contract. Friendly-name virtual hosting, encrypted
 LeaseSets, supported encodings and a well-supported provenance mechanism remain
 future decisions; none may enable DNS, outproxy or direct fallback.
 
+## Internal host-only probes
+
+Internal `ProbeTargetAsync` accepts the closed known-seed/discovered-host target
+model described in [transport](../I2pTransport/README.md#internal-host-only-probe-foundation).
+It returns an identity-neutral private `I2pProbeObservation`, with no fabricated
+seed or destination. Public `ProbeAsync(I2pSeed?, CancellationToken)` remains a
+seed adapter over this same state machine, including null-seed rejection. Its
+result shape, enums, User-Agent and behavior are unchanged.
+
+Both forms request only `/robots.txt` and, if the existing heuristic gate permits,
+`/`. Classification, origin evidence, representation rules, deadlines, cancellation,
+redirect handling and response limits are shared. Host-only resolution is owned
+by the configured proxy/router and is not claimed to be stable between requests.
+
+Metadata resolves relative URLs against the approved homepage descriptor:
+derived B32 for seeds, literal normalized hostname for host-only probes. The legacy
+metadata entry point remains an adapter; seeded title/link extraction and all
+bounds are unchanged. Discovered links remain inert. Existing commands and the
+snapshot-only scanner do not invoke the new discovered-host path; no frontier,
+scheduling, crawler CLI or persistence schema is introduced.
+
 ## Local proxy diagnostic
 
 Select one existing friendly hostname from an explicit private seed snapshot and

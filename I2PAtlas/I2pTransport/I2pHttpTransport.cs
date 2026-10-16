@@ -55,22 +55,32 @@ public sealed class I2pHttpTransport : IDisposable
     }
 
     /// <summary>Returns all proxy status codes unchanged. Caller owns the buffered response and must dispose it.</summary>
-    public Task<HttpResponseMessage> GetAsync(I2pHttpRequestTarget target, CancellationToken cancellationToken = default) =>
-        GetAsync(target, null, cancellationToken);
-
-    // A fixed crawler identity for the probe; no public arbitrary-header surface.
-    internal async Task<HttpResponseMessage> GetAsync(I2pHttpRequestTarget target, string? userAgent,
-        CancellationToken cancellationToken)
+    public async Task<HttpResponseMessage> GetAsync(I2pHttpRequestTarget target, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(target);
+        return await SendAsync(target.RequestUri, target.DestinationHostname, null, cancellationToken);
+    }
+
+    // Typed probes always use the fixed product identity, without a caller-header surface.
+    internal async Task<HttpResponseMessage> GetAsync(I2pProbeRequest target, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return await SendAsync(target.RequestUri, target.HostHeader, I2pProbing.I2pHttpProbe.UserAgent, cancellationToken);
+    }
+
+    // Only validated legacy targets or constrained probe descriptors reach this
+    // private send path. It is not a new arbitrary-URI/header surface for callers.
+    private async Task<HttpResponseMessage> SendAsync(Uri requestUri, string host, string? userAgent,
+        CancellationToken cancellationToken)
+    {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(requestTimeout);
-        using var request = new HttpRequestMessage(HttpMethod.Get, target.RequestUri)
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri)
         {
             Version = HttpVersion.Version11,
             VersionPolicy = HttpVersionPolicy.RequestVersionExact
         };
-        request.Headers.Host = target.DestinationHostname;
+        request.Headers.Host = host;
         if (userAgent != null) request.Headers.UserAgent.ParseAdd(userAgent);
         try
         {

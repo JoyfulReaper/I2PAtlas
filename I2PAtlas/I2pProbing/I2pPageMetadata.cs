@@ -30,6 +30,14 @@ public sealed record I2pPageMetadata(
     // Network-independent extraction. Calling this does not authenticate the bytes
     // or promote discovered URLs into approved network targets.
     internal static I2pPageMetadata Read(I2pHttpRequestTarget homepage, ReadOnlySpan<byte> body,
+        string? contentType, CancellationToken cancellationToken = default) =>
+        Read(homepage.RequestUri, body, contentType, cancellationToken);
+
+    internal static I2pPageMetadata Read(I2pProbeRequest homepage, ReadOnlySpan<byte> body,
+        string? contentType, CancellationToken cancellationToken = default) =>
+        Read(homepage.RequestUri, body, contentType, cancellationToken);
+
+    private static I2pPageMetadata Read(Uri homepageUri, ReadOnlySpan<byte> body,
         string? contentType, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -59,7 +67,7 @@ public sealed record I2pPageMetadata(
                 var raw = WebUtility.HtmlDecode(link.Groups["url"].Value).Trim();
                 if (raw.Length > I2pHttpRequestTarget.MaxUrlCharacters || raw.Length == 0 || raw[0] == '#' ||
                     raw.Any(char.IsControl) || raw.Contains('\\')) continue;
-                if (!Uri.TryCreate(homepage.RequestUri, raw, out var uri) ||
+                if (!Uri.TryCreate(homepageUri, raw, out var uri) ||
                     uri.Scheme is not ("http" or "https") || uri.UserInfo.Length != 0 ||
                     uri.HostNameType != UriHostNameType.Dns || !IsHostname(uri.Host)) continue;
                 // Helpers are neither processed nor included in the discovered URL set.

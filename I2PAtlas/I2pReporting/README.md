@@ -5,8 +5,8 @@ From the I2PAtlas repository root:
     dotnet run --project I2PAtlas -- i2p-view published/i2p-latest.json published/i2p-index.html
 
 Both paths are explicit local files. Create the output directory first. The command
-dispatches before DN42 configuration and never constructs scanners, transports,
-seed readers or the private raw reader. It reads only i2patlas.public-scan v1.
+never constructs scanners, transports, seed readers or the private raw reader.
+It reads only i2patlas.public-scan v1.
 
 I2pPublicScanReader enforces the exact root/entry property sets (including explicit
 nulls), rejects duplicate JSON properties, validates all string enums, UTC scan
@@ -25,9 +25,9 @@ Generated directory/detail/overview content is limited to 64 Mi UTF-16 character
 A public artifact whose private seed spellings collapsed to duplicate public
 identities is rejected rather than silently merged or assigned unstable IDs.
 
-The generator is separate from the DN42 report generator/template. It renders the
-full directory, details and discovery overview on the server. No public JSON is
-embedded in JavaScript; enhancement derives its inputs from HTML-encoded
+The generator renders the full directory, details and discovery overview during
+local HTML generation. No public JSON is embedded in JavaScript; enhancement
+derives its inputs from HTML-encoded
 attributes. Every public string is HTML-encoded again at rendering time. Unsafe
 hostname text cannot become an active external link even if an internal caller
 bypasses the reader. The page uses no framework, remote assets or dynamic fetch.

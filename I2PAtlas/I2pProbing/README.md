@@ -1,10 +1,11 @@
-# Isolated single-seed probe
+# Single-seed robots/homepage probe
 
 `new I2pHttpProbe(transport).ProbeAsync(validatedSeed, cancellationToken)` uses a
 caller-owned `I2pHttpTransport`. It sends `GET /robots.txt`, then conditionally
 `GET /`, with user agent `I2PAtlas/0.1`, to the destination-derived Base32 identity. The explicit diagnostic
 CLI below is available. The [bounded private snapshot scanner](../I2pScanning/README.md)
-reuses this component; publisher and viewer integration remain outside it.
+reuses this component. Public projection and viewer generation consume completed
+artifacts separately and do not invoke the probe.
 
 ## Observations and authorization
 
@@ -27,10 +28,10 @@ Destination-derived routing identifies the requested peer, not the response auth
 disallows root. Only status 200 is parsed. UTF-8 (optionally BOM) is accepted;
 invalid UTF-8 and control bytes fail conservatively. Absent Content-Type is
 allowed for observation; an explicit type must be text/plain and any charset must
-be UTF-8. Content-Encoding is unsupported. The shared DN42 robots evaluator
+be UTF-8. Content-Encoding is unsupported. The shared `Robots/RobotsPolicy.cs` evaluator
 selects I2PAtlas groups before wildcard groups, uses longest matching rules with
-Allow winning ties, and returns unknown for malformed policy. No DN42 network or
-404 authorization logic is shared.
+Allow winning ties, and returns unknown for malformed policy. A 404 does not
+authorize a homepage request.
 
 ## Heuristic classification and homepage authorization
 
@@ -119,8 +120,9 @@ credentials, unsafe schemes and address-helper links are omitted. Discovered URL
 are inert metadata, never request targets, scheduled work or recursive discovery.
 
 All seed mappings, destination identities, responses, locations and discovered
-metadata in this API are **private scan state**. This slice defines no public
-projection or artifact schema and copies nothing to public artifacts.
+metadata in this API are **private scan state**. The scanner records bounded
+observations in its private raw artifact; only the separate
+[validated projection](../I2pPublishing/README.md) selects public fields.
 
 Real-router integration remains necessary to observe actual error/status/header
 behavior and Base32 routing support. A router experiment alone cannot establish a
@@ -156,9 +158,9 @@ to probe those distinct seeds independently.
 Proxy validation requires an HTTP URI with literal loopback IP and explicit port.
 The existing transport alone performs networking. The probe sends one
 destination-bound `/robots.txt` request and, only through the exact gate above,
-one root request. There are no redirects, helper processing or discovered-link requests. Command dispatch
-precedes all DN42 policy, registry, scanner, lock and publication setup. There is
-no DNS, ambient proxy, direct route, clearnet fallback or output artifact.
+one root request. There are no redirects, helper processing or discovered-link
+requests. The diagnostic constructs only its seed reader, transport and probe.
+There is no DNS, ambient proxy, direct route, clearnet fallback or output artifact.
 
 The report shows the normalized friendly hostname, destination-derived Base32
 hostname, canonical configured proxy, request outcome, origin-evidence state,

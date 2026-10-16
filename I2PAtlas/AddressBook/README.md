@@ -3,7 +3,7 @@
 `AddressBookParser.ParseFile(path)` reads a local UTF-8 file (optional UTF-8 BOM).
 `Parse(reader, source)` reads a caller-owned `TextReader` and leaves it open.
 Neither API performs DNS, router lookups, HTTP requests or proxy configuration.
-This layer is not connected to the existing DN42 command/scanner pipeline.
+This parser supplies validated mappings to the local seed snapshot importer.
 For the local CLI import and versioned private artifact boundary, see
 [private I2P seed snapshots](../Seeds/README.md).
 
@@ -112,7 +112,7 @@ then preserved destination text, both ordinally and independently of input order
 Using the exact text as the tie-breaker keeps the seed layer independent of the
 HTTP target implementation. Snapshots contain immutable seeds and a source label (the absolute path for file
 imports). Source plus the preserved destination provide minimal import provenance
-and destination identity for later artifacts; there is no raw scan schema here.
+and destination identity for seed snapshots; scan evidence has a separate schema.
 Errors carry a one-based line number and source label and never echo destinations.
 Malformed entries, missing fields and exceeded limits throw
 `AddressBookParseException` without returning a partial snapshot. File/reader I/O

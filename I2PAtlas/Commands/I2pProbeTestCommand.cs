@@ -8,7 +8,7 @@ using I2PAtlas.Seeds;
 
 namespace I2PAtlas.Commands;
 
-/// <summary>Explicit one-seed integration diagnostic, independent of DN42 runtime setup.</summary>
+/// <summary>Explicit single-seed robots/homepage diagnostic through a configured local I2P HTTP proxy.</summary>
 public static class I2pProbeTestCommand
 {
     public const int MaxReportCharacters = 4096;

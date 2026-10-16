@@ -22,9 +22,9 @@ the entire snapshot is validated. Alternate destinations for one friendly hostna
 are scanned independently, each using its own destination-derived B32 target.
 
 The public service API is `I2pScanService.ScanAsync(snapshotPath, outputPath,
-proxyUri, settings, cancellationToken)`. CLI dispatch precedes DN42 policy,
-registry, scanner, operation lock and publication setup. The command reads no
-addressbook, registry, DNS or DN42 resolution artifact.
+proxyUri, settings, cancellationToken)`. The command loads only the validated
+seed snapshot; it does not reopen the addressbook, perform DNS, generate public
+output or take a cross-process operation lock.
 
 ## Input identity and bounded work
 
@@ -100,9 +100,10 @@ numeric HTTP status. There is no Reachable flag or authenticated-origin claim.
 
 The constructor enforces the supported raw schema/version and basic envelope
 counts. JSON round-trip/unsupported-version tests cover that envelope contract;
-this is **not a general validated reader for untrusted raw artifacts**. A future
-offline publisher must introduce full raw-input validation, size limits and an
-explicit projection rather than treating a JSON deserialize as trust.
+the constructor is **not a general validated reader for untrusted raw artifacts**.
+The existing [offline public projection](../I2pPublishing/README.md) uses
+`I2pRawScanReader` for full raw-input validation, size limits and consistency checks
+before selecting public fields. Plain deserialization is not that boundary.
 
 `metrics` contains total monotonic scan duration, sorted counts by robots request
 outcome/classification and homepage outcome/classification, homepage attempted
@@ -120,16 +121,17 @@ their mappings, Base32 identities, hashes, timestamps, proxy/settings, failures,
 titles, redirects and URLs remain private operational provenance here. Raw
 response metadata is untrusted and may contain control characters, URL tokens or
 other sensitive text. No field is automatically suitable for publication. A
-future public projection must apply publication/exclusion policy, omit private
-identities and operations, and escape/filter text and URLs explicitly. Heuristic
-classification and Unproven evidence must remain distinct from reachability.
+public projection uses a separate explicit allowlist, omits private operational
+fields and full URLs, and sanitizes display metadata. It intentionally exposes
+friendly names and B32 identities. Heuristic classification and Unproven evidence
+remain separate unauthenticated observations.
 
 Explicit input/output paths must be local ordinary files, not URLs, UNC/device
 paths, the same normalized path or filesystem links/reparse-point ancestors.
 Output path components named `published`, `public`, `wwwroot` or `site` are
 rejected as known served-root names. These checks do not discover arbitrary web
 server configuration: keep private output outside any other served directory too.
-No public file or directory is generated and no DN42 publisher/viewer is invoked.
+The scan generates no public file or viewer; those require separate commands.
 
 After successful probing, a unique `.i2p-scan-*.tmp` file is created in the output
 directory with the existing PrivateFile helper (0600 on Unix; inherited directory

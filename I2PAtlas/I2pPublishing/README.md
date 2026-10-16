@@ -7,8 +7,8 @@ dotnet run --project I2PAtlas -- i2p-project private/results/router-full.json pu
 Both paths are explicit local files. The output directory must already exist;
 `published/` is intentionally allowed for this public projection. Input and output
 must differ; URLs, UNC/device paths and filesystem links/reparse-point ancestors
-are rejected. This command dispatches before DN42 runtime setup. It performs no
-networking, DNS, registry operations, scanning or viewer generation. It never
+are rejected. This is a local artifact transformation with no
+networking, DNS, scanning or viewer generation. It never
 reopens the addressbook or seed snapshot. No discovered link creates work.
 
 Exit codes: 0 installed, 1 invalid raw evidence or I/O/resource failure, 2 invalid
@@ -128,8 +128,8 @@ incomplete if metadata is absent, marked incomplete, or body-truncated.
 Public titles have a stricter 160 UTF-16 character bound without splitting Unicode
 scalars. Control/format characters and line/paragraph separators are removed,
 edge whitespace is trimmed, and empty titles become null. Markup is retained as
-literal text, never interpreted. Default JSON escaping is enabled. **The future
-viewer must still HTML-escape titles; projection is not an XSS boundary.** Invalid
+literal text, never interpreted. Default JSON escaping is enabled. **The viewer
+HTML-escapes titles again; projection is not an HTML-escaping boundary.** Invalid
 or oversized media types become null; valid types lose all parameters.
 
 ## Privacy and installation
@@ -138,11 +138,11 @@ Everything absent from the explicit model stays private. This includes Base64
 destinations; addressbook/snapshot paths, hashes and provenance byte counts;
 proxy address/port; scan settings; per-seed timestamps/durations; private errors;
 redirect URLs; full discovered URLs; clearnet links; and raw metadata/annotations.
-No arbitrary dictionary or raw object is copied. The new public model intentionally
+No arbitrary dictionary or raw object is copied. The public model intentionally
 exposes friendly names, B32 identities, scan-level UTC times, observations, titles
 and discovered I2P hostnames; raw privacy does not imply these are automatically
 approved for another publication format. This command creates only the selected
-local JSON file, with no deployment or change to existing DN42 publishing.
+local JSON file, with no deployment or web-server configuration.
 
 After validation/projection, serialization uses a unique `.i2p-public-*.tmp` in
 the output directory. The existing `PrivateFile` helper protects staging (0600 on

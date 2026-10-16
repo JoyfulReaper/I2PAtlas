@@ -1,8 +1,7 @@
-# Isolated I2P HTTP transport
+# Proxy-only I2P HTTP transport
 
-This component is not connected to CLI dispatch, seed import, DN42 `HttpProber`
-or scanning. The isolated [single-seed probe](../I2pProbing/README.md) uses it for
-robots observations. It exposes a reusable, disposable GET transport;
+The [single-seed probe](../I2pProbing/README.md), used by the diagnostic and
+[bounded scanner](../I2pScanning/README.md), uses this reusable, disposable GET transport;
 constructing it and validating a target perform no network access. Only an explicit
 `GetAsync` call sends a request. Tests use synthetic destinations and local fake
 HTTP proxies; no I2P router or Internet service is required.
@@ -22,7 +21,7 @@ normalized friendly hostname or its destination-derived Base32 hostname. Another
 seed's `.i2p` name is rejected too. Userinfo, IPs, clearnet names, other schemes,
 malformed authorities, backslashes, whitespace/control characters, fragments and
 queries are rejected, including empty `?`/`#`. Queries are deliberately excluded
-in this slice to avoid proxy address-helper commands and their binding semantics.
+to avoid proxy address-helper commands and their binding semantics.
 URL length is capped at 4096 characters. The model has only getters, an immutable
 seed and an immutable URI. Callers cannot override Host, headers, methods or the
 underlying HttpClient/handler.
@@ -36,7 +35,7 @@ text and the existing destination-validation rules remain unchanged. Equivalent
 padded/unpadded encodings derive the same identity. The approved path is preserved
 under normal URI escaping/canonicalization. Both the proxy's absolute-form request
 URL and HTTP Host use the derived Base32 hostname. The friendly name is metadata
-for later reporting, never proxy routing authority. There is no friendly-name or
+for reporting, never proxy routing authority. There is no friendly-name or
 addressbook fallback when Base32 lookup fails.
 
 This deterministically selects the expected destination under a correctly behaving
@@ -87,5 +86,6 @@ passes the same endpoint guard and uses only the configured proxy.
 | Disposed transport | ObjectDisposedException on further sends; in-flight requests are canceled |
 
 Proxy authentication, detailed interpretation of proxy-generated pages, streaming
-larger bodies, query policy and future public artifact projections remain outside
-this slice. All routing identities and seed mappings remain private provenance.
+larger bodies and request query support are not implemented. Transport responses
+and seed mappings are private provenance; public output must pass through the
+[explicit public projection](../I2pPublishing/README.md).

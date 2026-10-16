@@ -3,13 +3,10 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
-# DN42Atlas generated files
+# I2PAtlas generated files
 
 # Private I2P working inputs and scan artifacts (repository root only)
 /private/
-
-# Resolver output
-domain-resolution.json
 
 # Scan artifacts
 results/
@@ -413,6 +410,3 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
-
-# Private local publication metadata
-.dn42atlas/

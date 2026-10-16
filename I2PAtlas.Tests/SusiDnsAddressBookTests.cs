@@ -151,7 +151,10 @@ public sealed class SusiDnsAddressBookTests
         var alternates = Parse($"example.i2p={Destination}#!date=1\nEXAMPLE.I2P.={other}#!date=1");
         Assert.HasCount(2, alternates.Seeds);
         CollectionAssert.AreEqual(new[] { Destination, other }, alternates.EntryMetadata.Select(m => m.Destination).ToArray());
-        Assert.HasCount(2, Parse($"example.i2p={Destination}#!date=1\nEXAMPLE.I2P.={Destination.TrimEnd('=')}#!date=1").Seeds);
+        var equivalent = Parse($"example.i2p={Destination}#!date=1\nEXAMPLE.I2P.={Destination.TrimEnd('=')}#!date=1");
+        Assert.AreEqual(Destination, equivalent.Seeds.Single().Destination);
+        CollectionAssert.AreEqual(new[] { Destination, Destination.TrimEnd('=') },
+            equivalent.EntryMetadata.Select(m => m.Destination).ToArray());
         // An identical mapping cannot hide an invalid suffix on a later duplicate.
         Assert.ThrowsExactly<AddressBookParseException>(() => Parse($"example.i2p={Destination}\nexample.i2p={Destination}#!sig="));
     }

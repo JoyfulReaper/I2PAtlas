@@ -20,6 +20,27 @@ public sealed class SeedSnapshotImportTests
     private static readonly string PaddedDestination = MakeDestination(1, payloadLength: 4);
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task EquivalentSpellingsImportOneSeedRetainFirstTextAndHashBothOriginalLines(bool paddedFirst)
+    {
+        using var files = new TemporaryFiles();
+        var unpadded = PaddedDestination.TrimEnd('=');
+        var first = paddedFirst ? PaddedDestination : unpadded;
+        var second = paddedFirst ? unpadded : PaddedDestination;
+        var original = Encoding.UTF8.GetBytes($"\uFEFFEXAMPLE.I2P.={first}\r\nexample.i2p={second}#!action=adddest#date=1790878952\r\n");
+        var input = files.Write("hosts.txt", "");
+        File.WriteAllBytes(input, original);
+        var output = Path.Combine(files.DirectoryPath, "seeds.json");
+        var imported = await Importer().ImportAsync(input, output);
+        Assert.AreEqual(first, imported.Seeds.Single().Destination);
+        Assert.AreEqual(Convert.ToHexString(SHA256.HashData(original)), imported.Source.Sha256);
+        Assert.AreEqual((long)original.Length, imported.Source.ByteLength);
+        Assert.AreEqual(first, (await SeedSnapshotReader.ReadAsync(output)).Seeds.Single().Destination);
+        CollectionAssert.AreEqual(original, await File.ReadAllBytesAsync(input));
+    }
+
+    [TestMethod]
     public async Task ValidImportUsesExplicitI2pSchemaPrivateProvenanceAndImmutableSeeds()
     {
         using var files = new TemporaryFiles();

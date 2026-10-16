@@ -27,18 +27,25 @@ public sealed class I2pProjectionTests
     private const string QuerySentinel = "PRIVATE_QUERY_SENTINEL";
 
     [TestMethod]
-    public async Task ArtifactFromUnmodifiedScannerPassesReaderAndProjectsBothDestinations()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ImportScanProjectViewPreservesDistinctDestinationsAndDeduplicatesEquivalentSpellings(bool equivalentSpelling)
     {
         using var files = new TemporaryFiles();
-        var export = files.Write("hosts.txt", $"plugins.i2p={SeedSnapshotTestData.Destination(30)}\nplugins.i2p={SeedSnapshotTestData.Destination(31)}");
+        var first = SeedSnapshotTestData.Destination(30, payloadLength: 4);
+        var second = equivalentSpelling ? first.TrimEnd('=') : SeedSnapshotTestData.Destination(31, payloadLength: 4);
+        var expectedCount = equivalentSpelling ? 1 : 2;
+        var export = files.Write("hosts.txt", $"plugins.i2p={first}\nplugins.i2p={second}");
         var snapshot = Path.Combine(files.DirectoryPath, "seeds.json");
-        await new SeedSnapshotImporter().ImportAsync(export, snapshot);
+        var imported = await new SeedSnapshotImporter().ImportAsync(export, snapshot);
+        Assert.HasCount(expectedCount, imported.Seeds);
+        Assert.AreEqual(first, imported.Seeds.Single(s => s.Destination == first).Destination);
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var serving = Task.Run(async () =>
         {
-            for (var request = 0; request < 4; request++)
+            for (var request = 0; request < expectedCount * 2; request++)
             {
                 using var client = await listener.AcceptTcpClientAsync(stop.Token);
                 using var stream = client.GetStream();
@@ -55,15 +62,17 @@ public sealed class I2pProjectionTests
         var rawPath = Path.Combine(files.DirectoryPath, "private-scan.json");
         var raw = await new I2pScanService().ScanAsync(snapshot, rawPath, $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}", cancellationToken: stop.Token);
         await serving;
+        Assert.AreEqual(expectedCount, raw.TotalSeeds);
+        Assert.AreEqual(expectedCount, raw.Metrics.HomepageResponseCount);
         // Projection only reads the completed raw artifact, with its input/router no longer available.
         listener.Stop();
         File.Delete(snapshot);
         File.Delete(export);
         var publicPath = Path.Combine(files.DirectoryPath, "public.json");
         var projected = await new I2pProjectionService().ProjectAsync(rawPath, publicPath);
-        Assert.AreEqual(2, projected.SeedCount);
+        Assert.AreEqual(expectedCount, projected.SeedCount);
         Assert.AreEqual(1, projected.UniqueHostnameCount);
-        Assert.IsTrue(projected.Entries.All(e => e.Hostname == "plugins.i2p" && e.DestinationsForHostname == 2));
+        Assert.IsTrue(projected.Entries.All(e => e.Hostname == "plugins.i2p" && e.DestinationsForHostname == expectedCount));
         Assert.IsTrue(projected.Entries.All(e => e.Title == "Real scan shape" && !e.LinkExtractionIncomplete));
         Assert.IsTrue(projected.Entries.All(e => e.DiscoveredI2pHostnames.SequenceEqual(["target.i2p"])));
         CollectionAssert.AreEquivalent(raw.Results.Select(r => r.DestinationHostname).ToArray(), projected.Entries.Select(e => e.DestinationHostname).ToArray());
@@ -71,7 +80,7 @@ public sealed class I2pProjectionTests
         var viewed = await new I2pViewerGenerator().GenerateAsync(publicPath, htmlPath);
         Assert.AreEqual("i2patlas.public-scan", viewed.Schema);
         Assert.AreEqual(1, viewed.Version);
-        Assert.AreEqual(2, viewed.SeedCount);
+        Assert.AreEqual(expectedCount, viewed.SeedCount);
         var html = await File.ReadAllTextAsync(htmlPath);
         Assert.Contains("Real scan shape", html);
         foreach (var entry in projected.Entries)
@@ -79,7 +88,43 @@ public sealed class I2pProjectionTests
             Assert.Contains(entry.DestinationHostname, html);
             Assert.Contains(I2pViewerGenerator.Id(entry), html);
         }
-        foreach (var seed in raw.Results) Assert.DoesNotContain(seed.Destination, html);
+        var publicJson = await File.ReadAllTextAsync(publicPath);
+        foreach (var destination in new[] { first, second })
+        {
+            Assert.DoesNotContain(destination, html);
+            Assert.DoesNotContain(destination, publicJson);
+        }
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task DuplicateSemanticRawIdentitiesAreRejectedAndProjectorNeverMergesObservations(bool differentSpelling)
+    {
+        using var files = new TemporaryFiles();
+        var padded = SeedSnapshotTestData.Destination(42, payloadLength: 4);
+        var b32 = I2pSeedIdentity.FromSeed(new I2pSeed("duplicate.i2p", padded)).DestinationHostname;
+        var first = RobotResult("duplicate.i2p", 42, 403) with { Destination = padded, DestinationHostname = b32 };
+        var second = RobotResult("duplicate.i2p", 42, 504) with
+        {
+            Destination = differentSpelling ? padded.TrimEnd('=') : padded,
+            DestinationHostname = b32
+        };
+        // Each observation is valid v1 evidence on its own; only their shared identity is invalid.
+        foreach (var observation in new[] { first, second })
+            Assert.AreEqual(1, (await I2pRawScanReader.ReadAsync(Write(files, Artifact([observation])))).TotalSeeds);
+        var raw = Artifact([first, second]);
+        var input = Write(files, raw);
+        var original = await File.ReadAllBytesAsync(input);
+        var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => I2pRawScanReader.ReadAsync(input));
+        Assert.Contains("Duplicate semantic seed identity", error.Message);
+        Assert.DoesNotContain(padded.TrimEnd('='), error.Message);
+        var projectorError = Assert.ThrowsExactly<InvalidDataException>(() => I2pPublicProjector.Project(raw, CancellationToken.None));
+        Assert.Contains("cannot be merged", projectorError.Message);
+        var output = files.Write("public.json", "previous public artifact");
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => new I2pProjectionService().ProjectAsync(input, output));
+        Assert.AreEqual("previous public artifact", await File.ReadAllTextAsync(output));
+        CollectionAssert.AreEqual(original, await File.ReadAllBytesAsync(input));
     }
 
     [TestMethod]

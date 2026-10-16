@@ -31,9 +31,9 @@ The reader validates:
 - UTC timestamps with explicit `Z`/`+00:00`, import <= scan start <= scan end,
   and each result's start/end inside that scan interval.
 - Existing strict hostname/destination rules, already normalized spelling, and
-  exact recomputation of the B32 identity through the existing pure request-target
-  derivation. No HTTP transport is constructed.
-- Strict ordinal hostname/destination-text result ordering, no duplicate pairs,
+  exact recomputation of the B32 identity through the shared neutral
+  `I2pSeedIdentity` helper. No HTTP transport is constructed.
+- Strict ordinal hostname/destination-text result ordering, no duplicate hostname/B32 identities,
   declared counts, seed limit application and bounded settings. The entire snapshot
   count and limit must explain the number of selected results.
 - Literal canonical loopback proxy identity and port, seed schema/version, bounded
@@ -97,9 +97,11 @@ linkExtractionIncomplete: boolean
 ```
 
 Separate seed entries survive even for one friendly hostname; none is preferred.
-Exact destination spellings are seed identities privately; optional Base64 padding
-can produce different private pairs with the same B32. Those entries remain, while
-`destinationsForHostname` counts distinct B32 identities rather than spellings.
+Base64 destination text is a preserved private representation; semantic identity
+is hostname plus derived B32. The raw reader rejects duplicate semantic identities,
+including equivalent Base64 spellings. The projector also rejects duplicate public
+identities rather than merging scanned observations. `destinationsForHostname`
+counts distinct B32 identities rather than spellings.
 
 Summary mapping uses this precedence:
 

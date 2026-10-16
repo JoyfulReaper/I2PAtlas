@@ -17,7 +17,7 @@ is no default or ambient proxy. Default concurrency is **2**, with a hard cap of
 4, to limit simultaneous work while allowing for I2P latency. Default timeout is
 10000 ms per request, and default maximum seeds is 10000. Duplicate/unknown
 options and values outside these bounds fail. `--max-seeds` selects the first N
-hostname/destination pairs in ordinal hostname then destination-text order, after
+hostname/B32 identities in ordinal hostname then retained destination-text order, after
 the entire snapshot is validated. Alternate destinations for one friendly hostname
 are scanned independently, each using its own destination-derived B32 target.
 

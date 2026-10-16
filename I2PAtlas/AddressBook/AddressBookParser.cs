@@ -33,7 +33,7 @@ public static class AddressBookParser
         ValidateSource(source);
         var seeds = ImmutableArray.CreateBuilder<I2pSeed>();
         var entryMetadata = ImmutableArray.CreateBuilder<AddressBookEntryMetadata>();
-        var uniqueSeeds = new HashSet<I2pSeed>();
+        var uniqueSeeds = new HashSet<(string Hostname, string DestinationHostname)>();
         var buffer = new char[MaxLineCharacters];
         var length = 0;
         var total = 0;
@@ -96,10 +96,11 @@ public static class AddressBookParser
                 entryMetadata.Add(new(lineNumber, seed.Hostname, seed.Destination, metadata));
 
             // Effective addressbooks can contain alternate destinations for one name.
-            // Record equality uses the normalized hostname and preserved destination text.
-            if (uniqueSeeds.Contains(seed)) return;
+            // Equivalent Base64 spellings share identity; retain the first source spelling.
+            var identity = I2pSeedIdentity.FromSeed(seed);
+            if (uniqueSeeds.Contains(identity)) return;
             if (seeds.Count == MaxSeeds) throw Error($"Addressbook exceeds {MaxSeeds} unique seeds.");
-            uniqueSeeds.Add(seed);
+            uniqueSeeds.Add(identity);
             seeds.Add(seed);
         }
 

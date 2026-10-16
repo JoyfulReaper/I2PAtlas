@@ -46,9 +46,10 @@ camel-case field names, fixed property order and indented formatting:
 The import timestamp comes from `TimeProvider` after successful parsing and is
 normalized to UTC. Tests can supply a fixed clock. Seeds are sorted by normalized
 hostname then preserved destination text with `StringComparer.Ordinal`, independent
-of input order or culture. Version 1's seed array permits multiple mappings for
-one hostname; identity is the hostname/destination pair. Each pair becomes an
-independent scan seed. Exact pairs deduplicate. Existing single-destination files
+of input order or culture for the retained spellings. Version 1's seed array permits
+multiple mappings for one hostname; semantic identity is hostname plus derived B32.
+Each identity becomes an independent scan seed. Equivalent Base64 spellings
+deduplicate on import, retaining the first private representation. Existing single-destination files
 retain their meaning; the JSON shape and schema version are unchanged.
 Destination case, I2P Base64 alphabet and padding remain unchanged except for the
 existing parser's permitted surrounding spaces/tabs. Empty books have `seeds: []`.
@@ -101,7 +102,9 @@ hexadecimal characters; source byte lengths must be nonnegative 64-bit integers.
 
 Every seed is reconstructed through `I2pSeed`, preserving its hostname and
 destination validation/normalization rules. Identical normalized hostname/destination
-pairs are deduplicated; alternate destinations for one hostname are retained. The array is
+pairs are deduplicated; alternate binary destinations for one hostname are retained.
+Different Base64 spellings for the same hostname/B32 identity are rejected with a
+re-import instruction rather than silently repaired. The array is
 capped at 10000 entries before deduplication, and accepted seeds are sorted
 by hostname then destination text ordinally in an immutable snapshot. Empty seed arrays are valid. Validation
 errors identify fields or entry indices without echoing private input values.

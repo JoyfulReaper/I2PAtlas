@@ -1,6 +1,6 @@
 namespace I2PAtlas.AddressBook;
 
-/// <summary>A validated local mapping, identified by normalized hostname plus preserved destination text.</summary>
+/// <summary>A validated local mapping with preserved private destination text; see <see cref="I2pSeedIdentity"/> for semantic identity.</summary>
 public sealed record I2pSeed
 {
     public string Hostname { get; }

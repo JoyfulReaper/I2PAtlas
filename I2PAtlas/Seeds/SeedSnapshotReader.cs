@@ -82,6 +82,7 @@ public static class SeedSnapshotReader
         if (entries.ValueKind != JsonValueKind.Array || entries.GetArrayLength() > AddressBookParser.MaxSeeds)
             throw Invalid("seeds must be an array with at most 10000 entries, including duplicates.");
         var seeds = new HashSet<I2pSeed>();
+        var representations = new Dictionary<(string Hostname, string DestinationHostname), string>();
         var index = 0;
         foreach (var entry in entries.EnumerateArray())
         {
@@ -92,6 +93,10 @@ public static class SeedSnapshotReader
             I2pSeed seed;
             try { seed = new I2pSeed(hostname, destination); }
             catch (FormatException) { throw Invalid($"Invalid seed at index {index}."); }
+            var identity = I2pSeedIdentity.FromSeed(seed);
+            if (representations.TryGetValue(identity, out var retained) && retained != seed.Destination)
+                throw Invalid($"Duplicate semantic seed identity with different destination text at index {index}; re-import the addressbook.");
+            representations.TryAdd(identity, seed.Destination);
             seeds.Add(seed);
             index++;
         }

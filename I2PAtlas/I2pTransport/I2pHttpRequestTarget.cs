@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using I2PAtlas.AddressBook;
 
 namespace I2PAtlas.I2pTransport;
@@ -32,37 +30,12 @@ public sealed class I2pHttpRequestTarget
         try { normalizedHost = new I2pSeed(host, seed.Destination).Hostname; }
         catch (FormatException) { throw Invalid(); }
 
-        DestinationHostname = DeriveHostname(seed.Destination);
+        DestinationHostname = I2pSeedIdentity.FromSeed(seed).DestinationHostname;
         if (normalizedHost != seed.Hostname && normalizedHost != DestinationHostname)
             throw Invalid();
 
         Seed = seed;
         RequestUri = new Uri($"http://{DestinationHostname}{requested.AbsolutePath}");
-    }
-
-    private static string DeriveHostname(string destination)
-    {
-        // Decode a temporary copy solely to hash the binary destination. The validated
-        // seed text (including its original case, alphabet and optional padding) is untouched.
-        var encoded = destination.Replace('-', '+').Replace('~', '/');
-        encoded = encoded.PadRight((encoded.Length + 3) / 4 * 4, '=');
-        var hash = SHA256.HashData(Convert.FromBase64String(encoded));
-        const string alphabet = "abcdefghijklmnopqrstuvwxyz234567";
-        var result = new StringBuilder(52);
-        var bits = 0;
-        var accumulator = 0;
-        foreach (var b in hash)
-        {
-            accumulator = (accumulator << 8) | b;
-            bits += 8;
-            while (bits >= 5)
-            {
-                bits -= 5;
-                result.Append(alphabet[(accumulator >> bits) & 31]);
-            }
-        }
-        if (bits > 0) result.Append(alphabet[(accumulator << (5 - bits)) & 31]);
-        return result + ".b32.i2p";
     }
 
     private static ArgumentException Invalid() => new(

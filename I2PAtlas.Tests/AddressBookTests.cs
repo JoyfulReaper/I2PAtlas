@@ -74,6 +74,7 @@ public sealed class AddressBookTests
         var reversed = Parse($"example.i2p={other}\nexample.i2p={Destination}");
         Assert.HasCount(2, snapshot.Seeds);
         Assert.IsTrue(snapshot.Seeds.All(s => s.Hostname == "example.i2p"));
+        Assert.HasCount(2, snapshot.Seeds.Select(I2pSeedIdentity.FromSeed).Distinct());
         CollectionAssert.AreEqual(snapshot.Seeds.ToArray(), reversed.Seeds.ToArray());
         CollectionAssert.AreEqual(new[] { Destination, other }.Order(StringComparer.Ordinal).ToArray(),
             snapshot.Seeds.Select(s => s.Destination).ToArray());
@@ -173,16 +174,37 @@ public sealed class AddressBookTests
     }
 
     [TestMethod]
-    public void DestinationTextComparisonDoesNotCanonicalizePaddingOrCase()
+    [DataRow(false)]
+    [DataRow(true)]
+    public void EquivalentSpellingsRetainFirstPrivateTextWithoutChangingRecordEquality(bool paddedFirst)
     {
         var padded = MakeDestination(5, 4);
         Assert.IsTrue(padded.EndsWith("==", StringComparison.Ordinal));
-        var spellings = Parse($"example.i2p={padded}\nexample.i2p={padded.TrimEnd('=')}");
-        CollectionAssert.AreEquivalent(new[] { padded, padded.TrimEnd('=') }, spellings.Seeds.Select(s => s.Destination).ToArray());
+        var unpadded = padded.TrimEnd('=');
+        var first = paddedFirst ? padded : unpadded;
+        var second = paddedFirst ? unpadded : padded;
+        var spellings = Parse($"example.i2p={first}#!date=1\nEXAMPLE.I2P.={second}#!action=adddest#date=2");
+        Assert.AreEqual(first, spellings.Seeds.Single().Destination);
+        Assert.HasCount(2, spellings.EntryMetadata);
+        Assert.AreEqual(second, spellings.EntryMetadata[1].Destination);
+        Assert.AreNotEqual(new I2pSeed("example.i2p", padded), new I2pSeed("example.i2p", unpadded));
+        Assert.ThrowsExactly<AddressBookParseException>(() => Parse($"example.i2p={first}\nexample.i2p={second}#!sig="));
+    }
+
+    [TestMethod]
+    public void DifferentFriendlyNamesOrBinaryDestinationsRemainIndependent()
+    {
+        var padded = MakeDestination(5, 4);
+        var aliases = Parse($"first.i2p={padded}\nsecond.i2p={padded.TrimEnd('=')}");
+        Assert.HasCount(2, aliases.Seeds);
+        Assert.HasCount(2, aliases.Seeds.Select(I2pSeedIdentity.FromSeed).Distinct());
+        Assert.AreEqual(I2pSeedIdentity.FromSeed(aliases.Seeds[0]).DestinationHostname,
+            I2pSeedIdentity.FromSeed(aliases.Seeds[1]).DestinationHostname);
         var caseChanged = (Destination[0] == 'a' ? "A" : "a") + Destination[1..];
         Assert.AreEqual(caseChanged, new I2pSeed("example.i2p", caseChanged).Destination);
         var distinct = Parse($"example.i2p={Destination}\nexample.i2p={caseChanged}");
         CollectionAssert.AreEquivalent(new[] { Destination, caseChanged }, distinct.Seeds.Select(s => s.Destination).ToArray());
+        Assert.HasCount(2, distinct.Seeds.Select(s => I2pSeedIdentity.FromSeed(s).DestinationHostname).Distinct());
     }
 
     [TestMethod]
@@ -257,11 +279,12 @@ public sealed class AddressBookTests
     }
 
     [TestMethod]
-    public void SeedLimitCountsUniquePairsAndRejectsOneMoreEvenForAnExistingHostname()
+    public void SeedLimitCountsSemanticIdentitiesAndRejectsOneMoreEvenForAnExistingHostname()
     {
+        var padded = MakeDestination(5, 4);
         var lines = string.Join('\n', Enumerable.Range(0, AddressBookParser.MaxSeeds)
-            .Select(i => $"host{i}.i2p={Destination}"));
-        Assert.HasCount(AddressBookParser.MaxSeeds, Parse(lines + $"\nHOST0.I2P.={Destination}").Seeds);
+            .Select(i => $"host{i}.i2p={padded}"));
+        Assert.HasCount(AddressBookParser.MaxSeeds, Parse(lines + $"\nHOST0.I2P.={padded.TrimEnd('=')}").Seeds);
         var error = Assert.ThrowsExactly<AddressBookParseException>(() => Parse(lines + $"\nhost0.i2p={MakeDestination(salt: 1)}"));
         Assert.AreEqual(AddressBookParser.MaxSeeds + 1, error.LineNumber);
         Assert.Contains("unique seeds", error.Message);

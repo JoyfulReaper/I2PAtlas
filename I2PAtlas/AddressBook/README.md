@@ -103,16 +103,16 @@ case, alphabet and padding are preserved exactly apart from surrounding spaces/t
 See the [I2P structure specification](https://i2p.net/en/docs/specs/common-structures/)
 and [reference Base64 implementation](https://github.com/i2p/i2p.i2p/blob/master/core/java/src/net/i2p/data/Base64.java).
 
-Seed identity is the normalized hostname plus ordinally identical destination text.
-Exact pairs deduplicate; one hostname may have multiple distinct destinations.
-Padded and unpadded spellings remain distinct pairs even if their derived B32
-identity is the same; no destination canonicalization is attempted. Different
-friendly names may share a destination. Successful snapshots sort by hostname,
-then preserved destination text, both ordinally and independently of input order.
-Using the exact text as the tie-breaker keeps the seed layer independent of the
-HTTP target implementation. Snapshots contain immutable seeds and a source label (the absolute path for file
+Semantic seed identity is normalized hostname plus destination-derived B32 hostname,
+computed by the neutral `I2pSeedIdentity` helper. Equivalent padded/unpadded spellings
+deduplicate, retaining the first valid source spelling without canonicalizing stored
+text. One hostname may have multiple binary destinations; different friendly names
+may share a destination. Record equality still compares preserved text; callers
+use the explicit identity helper for semantic comparisons. Successful snapshots
+sort by hostname then retained destination text, both ordinally. Snapshots contain
+immutable seeds and a source label (the absolute path for file
 imports). Source plus the preserved destination provide minimal import provenance
-and destination identity for seed snapshots; scan evidence has a separate schema.
+for seed snapshots; scan evidence has a separate schema.
 Errors carry a one-based line number and source label and never echo destinations.
 Malformed entries, missing fields and exceeded limits throw
 `AddressBookParseException` without returning a partial snapshot. File/reader I/O
@@ -128,7 +128,7 @@ Fixed limits bound both work and retained memory:
 | Metadata suffix after `#!` | 4,096 characters | Bounds a complete property block before allocating its map |
 | Metadata properties per line | 16 | Bounds generic annotation count; duplicate keys reject |
 | Metadata key / value | 64 / 2,048 characters | Bounds each retained annotation |
-| Unique hostname/destination pairs | 10,000 | Bounds collection overhead, including alternate destinations; exact duplicates still count toward total input |
+| Unique hostname/B32 identities | 10,000 | Bounds collection overhead, including alternate destinations; equivalent duplicates still count toward total input |
 | Source label | 1,024 characters, no controls | Bounded provenance and diagnostics |
 
 Limits are inclusive. Empty/comment-only books produce an empty snapshot. Large

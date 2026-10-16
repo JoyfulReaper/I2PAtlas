@@ -7,6 +7,31 @@ namespace I2PAtlas.Tests;
 public sealed class SeedSnapshotReaderTests
 {
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task EquivalentSpellingsInExistingV1SnapshotAreRejectedWithoutPrivateDiagnosticLeaks(bool paddedFirst)
+    {
+        using var files = new TemporaryFiles();
+        var padded = SeedSnapshotTestData.Destination(payloadLength: 4);
+        var unpadded = padded.TrimEnd('=');
+        var json = SeedSnapshotTestData.Snapshot();
+        json["seeds"]![0]!["destination"] = paddedFirst ? padded : unpadded;
+        json["seeds"]!.AsArray().Add(new JsonObject
+        {
+            ["hostname"] = "FRIENDLY.I2P.",
+            ["destination"] = paddedFirst ? unpadded : padded
+        });
+        var path = files.Write("seeds.json", json.ToJsonString());
+        var original = await File.ReadAllBytesAsync(path);
+        var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => SeedSnapshotReader.ReadAsync(path));
+        Assert.Contains("Duplicate semantic seed identity", error.Message);
+        Assert.Contains("re-import", error.Message);
+        Assert.DoesNotContain(unpadded, error.Message);
+        Assert.DoesNotContain(SeedSnapshotTestData.SourcePath, error.Message);
+        CollectionAssert.AreEqual(original, await File.ReadAllBytesAsync(path));
+    }
+
+    [TestMethod]
     public async Task ImportedSnapshotRoundTripsWithPrivateProvenanceAndPreservedDestination()
     {
         using var files = new TemporaryFiles();

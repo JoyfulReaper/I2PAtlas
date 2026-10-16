@@ -114,11 +114,12 @@ structured SusiDNS export metadata are supported. Action metadata is inert
 provenance: the importer consumes an effective addressbook export and never
 executes subscription mutations.
 
-A friendly hostname may have multiple destinations. Private seed identity is the
-**normalized hostname plus preserved destination text**. Exact pairs deduplicate;
-different destinations remain independent seeds, and no preferred destination is
-chosen. Each seed's binary destination determines its `.b32.i2p` target by SHA-256
-and lowercase Base32 encoding. The source hash covers the exact export bytes,
+A friendly hostname may have multiple destinations. Semantic seed identity is the
+**normalized hostname plus destination-derived B32 hostname**. Equivalent Base64
+spellings deduplicate on import, retaining the first spelling privately; different
+binary destinations remain independent seeds. Each seed's binary destination
+determines its `.b32.i2p` target by SHA-256 and lowercase Base32 encoding.
+The source hash covers the exact export bytes,
 including metadata, comments, whitespace and line endings.
 
 ## Transport and probe policy
@@ -207,8 +208,8 @@ the scanner's proxy configuration.
 - There is no scheduler, deployment package or hosting command.
 - Addressbook quality affects coverage, and friendly-name resolution can differ
   between addressbooks. Routing by B32 does not provide friendly-name virtual hosting.
-- Distinct preserved Base64 spellings can derive the same B32 identity. The public
-  reader rejects duplicate friendly-name/B32 pairs rather than merging them.
+- Older private snapshots with equivalent Base64 spellings for one identity must
+  be re-imported. Readers reject these duplicates; scanned observations are never merged.
 
 ## Technical documentation
 

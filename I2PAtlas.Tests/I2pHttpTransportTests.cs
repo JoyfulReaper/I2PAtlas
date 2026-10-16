@@ -81,6 +81,7 @@ public sealed class I2pHttpTransportTests
         // Expected vectors independently computed with Node SHA-256 and bit-string Base32 encoding.
         var destination = MakeDestination(payloadLength);
         var seed = new I2pSeed("Friendly.I2P.", destination);
+        Assert.AreEqual(("friendly.i2p", expected), I2pSeedIdentity.FromSeed(seed));
         var target = new I2pHttpRequestTarget(seed, "HTTP://FRIENDLY.I2P.:80/test%20path");
         Assert.AreEqual(expected, target.DestinationHostname);
         Assert.AreEqual("http://" + expected + "/test%20path", target.RequestUri.AbsoluteUri);

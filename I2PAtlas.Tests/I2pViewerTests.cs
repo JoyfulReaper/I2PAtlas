@@ -67,6 +67,24 @@ public sealed class I2pViewerTests
     }
 
     [TestMethod]
+    public async Task DuplicatePublicIdentityIsStillRejectedWithOtherwiseValidFieldsAndCounts()
+    {
+        using var files = new TemporaryFiles();
+        var root = Node();
+        var entry = root["entries"]![0]!.DeepClone();
+        entry["destinationsForHostname"] = 1;
+        root["entries"] = new JsonArray(entry, entry.DeepClone());
+        root["seedCount"] = 2;
+        root["uniqueHostnameCount"] = 1;
+        var input = files.Write("public.json", root.ToJsonString());
+        var output = files.Write("viewer.html", "previous HTML");
+        var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => I2pPublicScanReader.ReadAsync(input));
+        Assert.Contains("without duplicate identities", error.Message);
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => new I2pViewerGenerator().GenerateAsync(input, output));
+        Assert.AreEqual("previous HTML", await File.ReadAllTextAsync(output));
+    }
+
+    [TestMethod]
     [DataRow("schema")][DataRow("version")][DataRow("version-string")][DataRow("unknown-root")]
     [DataRow("unknown-entry")][DataRow("missing-root")][DataRow("missing-entry")][DataRow("enum-number")]
     [DataRow("enum-case")][DataRow("enum-unknown")][DataRow("robots-enum")][DataRow("outcome-enum")]

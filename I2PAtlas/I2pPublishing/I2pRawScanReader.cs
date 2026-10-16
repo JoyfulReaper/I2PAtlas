@@ -77,11 +77,13 @@ public static class I2pRawScanReader
         Require(entries.GetArrayLength() == total && total == Math.Min(snapshotCount, settings.MaximumSeeds) &&
             Boolean(root, "seedLimitApplied") == (total < snapshotCount), "Inconsistent result counts or seed limit.");
         var results = ImmutableArray.CreateBuilder<I2pRawSeedResult>(total);
+        var identities = new HashSet<(string Hostname, string DestinationHostname)>();
         I2pSeed? previous = null;
         foreach (var entry in entries.EnumerateArray())
         {
             token.ThrowIfCancellationRequested();
             var result = Result(entry, started, completed);
+            Require(identities.Add((result.Hostname, result.DestinationHostname)), "Duplicate semantic seed identity in raw results.");
             var seed = new I2pSeed(result.Hostname, result.Destination);
             var hostnameOrder = previous == null ? -1 : string.CompareOrdinal(previous.Hostname, seed.Hostname);
             Require(previous == null || hostnameOrder < 0 || (hostnameOrder == 0 && string.CompareOrdinal(previous.Destination, seed.Destination) < 0),
@@ -105,7 +107,7 @@ public static class I2pRawScanReader
         var seed = new I2pSeed(hostname, destination);
         Require(hostname == seed.Hostname && destination == seed.Destination, "Seed fields must already be normalized.");
         var b32 = Text(entry, "destinationHostname", 60);
-        Require(b32 == new I2pHttpRequestTarget(seed, $"http://{hostname}/robots.txt").DestinationHostname, "Mismatched destination-derived identity.");
+        Require(b32 == I2pSeedIdentity.FromSeed(seed).DestinationHostname, "Mismatched destination-derived identity.");
         var started = Timestamp(entry, "startedAtUtc");
         var completed = Timestamp(entry, "completedAtUtc");
         Require(scanStarted <= started && started <= completed && completed <= scanCompleted, "Invalid result timestamp ordering.");

@@ -18,9 +18,12 @@ internal static class I2pPublicProjector
         var counts = raw.Results.GroupBy(r => r.Hostname, StringComparer.Ordinal).ToDictionary(g => g.Key,
             g => g.Select(r => r.DestinationHostname).Distinct(StringComparer.Ordinal).Count(), StringComparer.Ordinal);
         var entries = ImmutableArray.CreateBuilder<I2pPublicEntry>(raw.Results.Length);
+        var identities = new HashSet<(string Hostname, string DestinationHostname)>();
         foreach (var result in raw.Results)
         {
             token.ThrowIfCancellationRequested();
+            if (!identities.Add((result.Hostname, result.DestinationHostname)))
+                throw new InvalidDataException("Duplicate public seed identity; scanned observations cannot be merged.");
             var links = (result.HomepageMetadata?.Links ?? []).Where(link => link.Kind == I2pDiscoveredLinkKind.I2p)
                 .Select(link => I2pSeed.NormalizeHostname(new Uri(link.Url, UriKind.Absolute).Host))
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToImmutableArray();

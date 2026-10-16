@@ -62,8 +62,10 @@ Base64 spelling and padding, except surrounding spaces/tabs. Encoding and the
 variable-length destination/certificate envelope are validated; signatures and
 ownership are not.
 
-Identity is a normalized hostname plus ordinally identical destination text.
-Exact pairs deduplicate. Alternate destinations for the same friendly name stay
+Semantic identity is a normalized hostname plus destination-derived B32 hostname.
+Equivalent Base64 spellings deduplicate on import, retaining the first private text.
+`AddressBook/I2pSeedIdentity` owns the shared binary hash/B32 derivation used by
+import, request targets and strict readers. Alternate destinations for the same friendly name stay
 independent; different friendly names may share a destination. Metadata cannot
 change identity or execute subscription actions. An `action=adddest` annotation
 does not add any mapping beyond the ordinary mapping on that line.
@@ -84,7 +86,9 @@ immutable seed array in `i2patlas.seed-snapshot` v1.
 `SeedSnapshotReader` requires the exact schema and integer version 1, required
 field sets, unique JSON properties, supported types, explicit UTC time, bounded
 provenance and seeds reconstructed through `I2pSeed`. Identical normalized pairs
-deduplicate; alternate destinations survive. Accepted seeds are ordinally sorted.
+deduplicate; alternate destinations survive. Different Base64 spellings for one
+semantic identity are rejected with a re-import instruction, never repaired.
+Accepted seeds are ordinally sorted.
 The reader is local and never reopens the recorded addressbook path.
 
 `ReadWithIdentityAsync` additionally returns SHA-256 and byte length for the
@@ -199,7 +203,7 @@ Selected resource limits:
 
 | Boundary | Bound |
 | --- | --- |
-| Addressbook | 16,777,216 decoded UTF-16 characters; 16,384 per physical line; 8192 per destination; 10000 unique pairs |
+| Addressbook | 16,777,216 decoded UTF-16 characters; 16,384 per physical line; 8192 per destination; 10000 unique semantic identities |
 | Seed snapshot reader | 32 MiB JSON; depth 8; 10000 entries before pair deduplication |
 | HTTP request | 16 KiB response headers; 256 KiB buffered body; default 10-second connection/header/body deadline |
 | Robots evaluation | 64 KiB; regex match deadline 100 ms |
@@ -233,10 +237,10 @@ Public strings remain untrusted display data.
 
 Private seed/result order is hostname then destination text; public order is
 hostname then B32. No destination is preferred or removed for sharing a friendly
-hostname. `destinationsForHostname` counts distinct B32 identities. Different
-Base64 spellings may yield the same B32; those private pairs remain distinct.
-The public viewer reader rejects duplicate friendly-name/B32 pairs rather than
-merging them or changing stable IDs.
+hostname. `destinationsForHostname` counts distinct B32 identities. The raw reader
+and projector reject duplicate friendly-name/B32 identities rather than merging
+scanned observations. The public viewer reader retains the same strict duplicate
+check and unchanged stable IDs.
 
 ## Strict public reader and viewer
 

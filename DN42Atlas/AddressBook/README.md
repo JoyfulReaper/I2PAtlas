@@ -4,6 +4,8 @@
 `Parse(reader, source)` reads a caller-owned `TextReader` and leaves it open.
 Neither API performs DNS, router lookups, HTTP requests or proxy configuration.
 This layer is not connected to the existing DN42 command/scanner pipeline.
+For the local CLI import and versioned private artifact boundary, see
+[private I2P seed snapshots](../Seeds/README.md).
 
 Each non-comment line must be `hostname.i2p=destination`. LF, CRLF and CR line
 endings are accepted, including a final line without a newline. Blank lines and

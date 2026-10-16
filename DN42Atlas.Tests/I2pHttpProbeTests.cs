@@ -76,8 +76,8 @@ public sealed class I2pHttpProbeTests
     }
 
     [TestMethod]
-    [DataRow(200, "User-agent: *\nAllow: /", I2pRobotsObservation.AllowsRoot, I2pHomepageDisposition.SkippedOriginUnproven)]
-    [DataRow(200, "", I2pRobotsObservation.AllowsRoot, I2pHomepageDisposition.SkippedOriginUnproven)]
+    [DataRow(200, "User-agent: *\nAllow: /", I2pRobotsObservation.AllowsRoot, I2pHomepageDisposition.ResponseObserved)]
+    [DataRow(200, "", I2pRobotsObservation.AllowsRoot, I2pHomepageDisposition.SkippedAmbiguousResponse)]
     [DataRow(200, "User-agent: *\nDisallow: /", I2pRobotsObservation.DisallowsRoot, I2pHomepageDisposition.SkippedObservedDisallow)]
     [DataRow(200, "<html>proxy error</html>", I2pRobotsObservation.Malformed, I2pHomepageDisposition.SkippedRobotsUnknown)]
     [DataRow(200, "User-agent:\nAllow: /", I2pRobotsObservation.Malformed, I2pHomepageDisposition.SkippedRobotsUnknown)]
@@ -100,10 +100,11 @@ public sealed class I2pHttpProbeTests
         Assert.AreEqual(Encoding.UTF8.GetByteCount(body), result.RobotsResponse.BodyBytes);
         Assert.AreEqual(expectedRobots, result.Robots);
         Assert.AreEqual(expectedHomepage, result.Homepage);
-        Assert.IsFalse(result.HomepageRequestAttempted);
+        Assert.AreEqual(expectedHomepage == I2pHomepageDisposition.ResponseObserved, result.HomepageRequestAttempted);
         Assert.AreEqual(Seed, result.Seed);
         Assert.AreEqual(Root.DestinationHostname, result.DestinationHostname);
-        AssertOneRobotsRequest(proxy);
+        if (result.HomepageRequestAttempted) AssertRobotsAndRootRequests(proxy);
+        else AssertOneRobotsRequest(proxy);
     }
 
     [TestMethod]
@@ -320,6 +321,19 @@ public sealed class I2pHttpProbeTests
         Assert.Contains("User-Agent: " + I2pHttpProbe.UserAgent, headers);
     }
 
+    private static void AssertRobotsAndRootRequests(FakeProxy proxy)
+    {
+        Assert.HasCount(2, proxy.Requests);
+        var requests = proxy.Requests.ToArray();
+        Assert.AreEqual($"GET http://{Root.DestinationHostname}/robots.txt HTTP/1.1", requests[0][0]);
+        Assert.AreEqual($"GET http://{Root.DestinationHostname}/ HTTP/1.1", requests[1][0]);
+        foreach (var headers in requests)
+        {
+            Assert.Contains($"Host: {Root.DestinationHostname}", headers);
+            Assert.Contains("User-Agent: " + I2pHttpProbe.UserAgent, headers);
+        }
+    }
+
     private static string Destination() => Convert.ToBase64String(new byte[387]).Replace('+', '-').Replace('/', '~');
     private static byte[] Response(int status, string body, string headers = "") => Response(status, Encoding.UTF8.GetBytes(body), headers);
     private static byte[] Response(int status, byte[] body, string headers = "") =>
@@ -379,6 +393,7 @@ public sealed class I2pHttpProbeTests
                 }
             }
             catch (OperationCanceledException) when (stopped.IsCancellationRequested) { }
+            catch (ObjectDisposedException) when (stopped.IsCancellationRequested) { }
             catch (SocketException) when (stopped.IsCancellationRequested) { }
             catch (IOException) when (stopped.IsCancellationRequested) { }
         }

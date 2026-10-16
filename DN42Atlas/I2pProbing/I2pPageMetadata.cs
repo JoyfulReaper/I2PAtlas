@@ -27,8 +27,8 @@ public sealed record I2pPageMetadata(
     private static readonly Regex LinkPattern = Pattern(
         """href\s*=\s*["'](?<url>[^"'<>]+)["']|(?<url>https?://[^\s"'<>]+)""");
 
-    // Network-independent preparation for a future authenticated homepage response.
-    // The generic probe cannot authorize homepage access and does not call this yet.
+    // Network-independent extraction. Calling this does not authenticate the bytes
+    // or promote discovered URLs into approved network targets.
     internal static I2pPageMetadata Read(I2pHttpRequestTarget homepage, ReadOnlySpan<byte> body,
         string? contentType, CancellationToken cancellationToken = default)
     {

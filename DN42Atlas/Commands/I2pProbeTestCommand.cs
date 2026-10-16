@@ -74,7 +74,8 @@ public static class I2pProbeTestCommand
         var result = await new I2pHttpProbe(transport).ProbeAsync(seed, cancellationToken);
         stopwatch.Stop();
         await output.WriteAsync(Report(result, endpoint, stopwatch.Elapsed));
-        return result.RequestOutcome == I2pRequestOutcome.ProxyHttpResponse ? 0 : 1;
+        return result.RequestOutcome == I2pRequestOutcome.ProxyHttpResponse &&
+            (!result.HomepageRequestAttempted || result.HomepageRequestOutcome == I2pRequestOutcome.ProxyHttpResponse) ? 0 : 1;
     }
 
     private static string Report(I2pProbeResult result, I2pProxyEndpoint endpoint, TimeSpan elapsed)
@@ -86,12 +87,21 @@ public static class I2pProbeTestCommand
         report.AppendLine($"Configured proxy: {endpoint.Uri.AbsoluteUri}");
         report.AppendLine($"Request outcome: {result.RequestOutcome}");
         report.AppendLine($"Origin evidence: {result.OriginEvidence}");
+        report.AppendLine($"Robots proxy classification (heuristic): {result.ProxyResponseClassification}");
         report.AppendLine($"HTTP status: {result.RobotsResponse?.StatusCode.ToString(CultureInfo.InvariantCulture) ?? "not observed"}");
         report.AppendLine($"Content type (media type only): {MediaType(result.RobotsResponse?.ContentType)}");
         report.AppendLine($"Body bytes: {result.RobotsResponse?.BodyBytes.ToString(CultureInfo.InvariantCulture) ?? "not observed"}");
         report.AppendLine($"Robots observation: {result.Robots}");
         report.AppendLine($"Homepage disposition: {result.Homepage}");
         report.AppendLine($"Homepage request attempted: {result.HomepageRequestAttempted}");
+        report.AppendLine($"Homepage request outcome: {result.HomepageRequestOutcome?.ToString() ?? "not attempted"}");
+        report.AppendLine($"Homepage origin evidence: {result.HomepageOriginEvidence}");
+        report.AppendLine($"Homepage proxy classification (heuristic): {result.HomepageProxyResponseClassification?.ToString() ?? "not observed"}");
+        report.AppendLine($"Homepage HTTP status: {result.HomepageResponse?.StatusCode.ToString(CultureInfo.InvariantCulture) ?? "not observed"}");
+        report.AppendLine($"Homepage content type (media type only): {MediaType(result.HomepageResponse?.ContentType)}");
+        report.AppendLine($"Homepage body bytes: {result.HomepageResponse?.BodyBytes.ToString(CultureInfo.InvariantCulture) ?? "not observed"}");
+        report.AppendLine($"Homepage discovered link count: {result.HomepageMetadata?.Links.Length.ToString(CultureInfo.InvariantCulture) ?? "not extracted"}");
+        report.AppendLine($"Homepage redirect location (redacted): {Redirect(result.HomepageResponse?.RedirectLocation)}");
         report.AppendLine($"Redirect location (redacted): {Redirect(result.RobotsResponse?.RedirectLocation)}");
         report.AppendLine($"Redirect location truncated by probe: {result.RobotsResponse?.RedirectLocationTruncated ?? false}");
         report.AppendLine($"Elapsed probe milliseconds: {elapsed.TotalMilliseconds.ToString("F1", CultureInfo.InvariantCulture)}");

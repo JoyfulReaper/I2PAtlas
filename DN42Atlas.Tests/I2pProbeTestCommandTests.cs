@@ -16,10 +16,10 @@ public sealed class I2pProbeTestCommandTests
     private static readonly string BoundHost = new I2pHttpRequestTarget(Seed, "http://friendly.i2p/").DestinationHostname;
 
     [TestMethod]
-    [DataRow(200, "User-agent: *\nAllow: /", "AllowsRoot", "SkippedOriginUnproven")]
+    [DataRow(200, "User-agent: *\nAllow: /", "AllowsRoot", "ResponseObserved")]
     [DataRow(404, "proxy not found", "UnknownStatus", "SkippedRobotsUnknown")]
     [DataRow(500, "proxy error", "UnknownStatus", "SkippedRobotsUnknown")]
-    public async Task HttpResponsesReportObservationsWithoutAuthorizingHomepage(int status, string body, string robots, string homepage)
+    public async Task HttpResponsesReportObservationsAndExplicitHomepageDisposition(int status, string body, string robots, string homepage)
     {
         using var files = new TestFiles();
         var path = Snapshot(files);
@@ -33,13 +33,13 @@ public sealed class I2pProbeTestCommandTests
             "Friendly hostname: friendly.i2p", "Destination-derived hostname: " + BoundHost,
             "Configured proxy: " + proxy.Uri, "Request outcome: ProxyHttpResponse", "Origin evidence: Unproven",
             "HTTP status: " + status, "Content type (media type only): text/plain", "Body bytes: " + Encoding.UTF8.GetByteCount(body),
-            "Robots observation: " + robots, "Homepage disposition: " + homepage, "Homepage request attempted: False",
+            "Robots observation: " + robots, "Homepage disposition: " + homepage, "Homepage request attempted: " + (status == 200),
             "Elapsed probe milliseconds:", "Proxy response != authenticated origin response."
         }) Assert.Contains(expected, result.Output);
         Assert.DoesNotContain(body, result.Output);
         Assert.DoesNotContain("PRIVATE-", result.Output);
         AssertPrivateAndBounded(result, path);
-        AssertOneBoundRobotsRequest(proxy);
+        AssertOneBoundRobotsRequest(proxy, homepage: status == 200);
     }
 
     [TestMethod]
@@ -199,9 +199,11 @@ public sealed class I2pProbeTestCommandTests
         Assert.AreEqual(0, result.Code, result.Error);
         Assert.AreEqual("", result.Error);
         Assert.Contains("Request outcome: ProxyHttpResponse", result.Output);
-        Assert.Contains("Homepage disposition: SkippedOriginUnproven", result.Output);
+        Assert.Contains("Homepage disposition: ResponseObserved", result.Output);
+        Assert.Contains("Robots proxy classification (heuristic): LikelyOriginResponse", result.Output);
+        Assert.Contains("Homepage origin evidence: Unproven", result.Output);
         AssertPrivateAndBounded(result, path);
-        AssertOneBoundRobotsRequest(proxy);
+        AssertOneBoundRobotsRequest(proxy, homepage: true);
         CollectionAssert.AreEqual(before, Directory.GetFileSystemEntries(files.DirectoryPath).Order(StringComparer.Ordinal).ToArray());
     }
 
@@ -240,14 +242,20 @@ public sealed class I2pProbeTestCommandTests
         }
     }
 
-    private static void AssertOneBoundRobotsRequest(FakeProxy proxy)
+    private static void AssertOneBoundRobotsRequest(FakeProxy proxy, bool homepage = false)
     {
-        Assert.HasCount(1, proxy.Requests);
-        var request = proxy.Requests.Single();
+        Assert.HasCount(homepage ? 2 : 1, proxy.Requests);
+        var request = proxy.Requests.First();
         Assert.AreEqual($"GET http://{BoundHost}/robots.txt HTTP/1.1", request[0]);
         Assert.Contains("Host: " + BoundHost, request);
         Assert.Contains("User-Agent: I2PAtlas/0.1", request);
         Assert.IsFalse(request[0].Contains("i2paddresshelper", StringComparison.OrdinalIgnoreCase));
+        if (homepage)
+        {
+            var root = proxy.Requests.Last();
+            Assert.AreEqual($"GET http://{BoundHost}/ HTTP/1.1", root[0]);
+            Assert.Contains("Host: " + BoundHost, root);
+        }
     }
 
     private static byte[] Response(int status, string body, string headers = "") => Encoding.UTF8.GetBytes(
@@ -312,6 +320,7 @@ public sealed class I2pProbeTestCommandTests
                 }
             }
             catch (OperationCanceledException) when (stopped.IsCancellationRequested) { }
+            catch (ObjectDisposedException) when (stopped.IsCancellationRequested) { }
             catch (SocketException) when (stopped.IsCancellationRequested) { }
             catch (IOException) when (stopped.IsCancellationRequested) { }
         }

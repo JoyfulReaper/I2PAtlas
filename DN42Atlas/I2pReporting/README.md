@@ -39,13 +39,18 @@ normalized public hostname + "\n" + destinationHostname. Titles, array positions
 summary states and scan times do not affect it. Every destination remains a row;
 multi-destination hosts get equal treatment and a visible count badge.
 
-Fresh documents start with Any filters, independently of browser form restoration.
+Fresh documents start with Homepage set to HTTP 200 observed and other filters
+set to Any, independently of browser form restoration. Homepage also offers Any
+homepage response (a non-null homepage status), No homepage response (a null
+homepage status), and All entries. It uses only the existing public data-http
+row attribute; robots HTTP statuses do not count as homepage responses.
 Search covers friendly name, B32, title, content type and discovered names.
 Summary and robots filters include every current enum; the compact discovery
 filter offers title, discovered hosts, multiple destinations and incomplete
 extraction. Sorting covers hostname, title, summary, homepage HTTP and discovered
-count, with the full public pair as the final ordinal tie-breaker. Reset clears
-filters and retains sorting. Explicit deep links relax only conflicting filters.
+count, with the full public pair as the final ordinal tie-breaker. Reset restores
+the HTTP 200 homepage default, clears other filters, and retains sorting.
+Explicit deep links relax only conflicting filters, including Homepage when needed.
 History traversal preserves applied filters, except where revealing its explicit
 target requires relaxing them; BFCache resumes applied controls.
 

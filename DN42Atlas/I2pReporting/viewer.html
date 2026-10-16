@@ -113,7 +113,8 @@ footer { margin: 1.5rem 0 0; font-size: .85rem; }
         const state = document.getElementById('state');
         const robots = document.getElementById('robots');
         const discovery = document.getElementById('discovery');
-        const filters = [search, state, robots, discovery];
+        const homepage = document.getElementById('homepage');
+        const filters = [search, state, robots, discovery, homepage];
         const headers = Array.from(document.querySelectorAll('th[data-sort]'));
         const controls = document.getElementById('controls');
         const previous = document.getElementById('previous');
@@ -158,11 +159,23 @@ footer { margin: 1.5rem 0 0; font-size: .85rem; }
                 default: return true;
             }
         }
+        function homepageMatches(row) {
+            switch (homepage.value) {
+                case '200': return row.dataset.http === '200';
+                case 'response': return row.dataset.http !== '';
+                case 'none': return row.dataset.http === '';
+                default: return true;
+            }
+        }
+        function resetFilters() {
+            for (const control of filters) control.value = '';
+            homepage.value = '200';
+        }
         function matches() {
             const query = search.value.trim().toLowerCase();
             return rows.filter(row => row.dataset.search.includes(query) &&
                 (!state.value || row.dataset.state === state.value) &&
-                (!robots.value || row.dataset.robots === robots.value) && discoveryMatches(row));
+                (!robots.value || row.dataset.robots === robots.value) && discoveryMatches(row) && homepageMatches(row));
         }
         function remember() { applied = filters.map(control => control.value); }
         function restore() { filters.forEach((control, i) => { control.value = applied[i]; }); }
@@ -210,6 +223,7 @@ footer { margin: 1.5rem 0 0; font-size: .85rem; }
             if (state.value && state.value !== row.dataset.state) state.value = '';
             if (robots.value && robots.value !== row.dataset.robots) robots.value = '';
             if (!discoveryMatches(row)) discovery.value = '';
+            if (!homepageMatches(row)) homepage.value = '';
             filtered = matches();
             remember();
             select(id, updateHash);
@@ -240,9 +254,9 @@ footer { margin: 1.5rem 0 0; font-size: .85rem; }
             if (filtered.length) select(filtered[Math.floor(Math.random() * filtered.length)].dataset.service);
         });
         search.addEventListener('input', () => applyFilter());
-        for (const filter of [state, robots, discovery]) filter.addEventListener('change', () => applyFilter());
+        for (const filter of [state, robots, discovery, homepage]) filter.addEventListener('change', () => applyFilter());
         document.getElementById('reset').addEventListener('click', () => {
-            for (const control of filters) control.value = '';
+            resetFilters();
             applyFilter();
         });
         for (const header of headers) {
@@ -308,8 +322,8 @@ footer { margin: 1.5rem 0 0; font-size: .85rem; }
         window.addEventListener('popstate', historyNavigation);
         window.addEventListener('hashchange', historyNavigation);
         window.addEventListener('pageshow', () => { restore(); requestAnimationFrame(restore); });
-        // Fresh documents start with Any filters; browser-restored form state is not filter persistence.
-        for (const control of filters) control.value = '';
+        // Fresh documents use the HTTP 200 default, regardless of browser-restored form values.
+        resetFilters();
         sortRows();
         applyFilter(false);
         fromHash(initialHash);
@@ -344,6 +358,7 @@ Responses are observations, not authenticated proof of origin or liveness.</p>
 <span id="copy-status" role="status" aria-live="polite" aria-atomic="true"></span>
 <label id="copy-fallback" class="copy-fallback" for="copy-url" hidden>Service link <input id="copy-url" type="text" readonly></label>
 <label class="search-label" for="search">Search <input id="search" type="search" placeholder="Hostname, B32, title, type, discovered host"></label>
+<label for="homepage">Homepage <select id="homepage"><option value="200" selected>HTTP 200 observed</option><option value="response">Any homepage response</option><option value="none">No homepage response</option><option value="">All entries</option></select></label>
 <label for="state">Summary state <select id="state"><option value="">Any</option>{{states}}</select></label>
 <label for="robots">Robots observation <select id="robots"><option value="">Any</option>{{robots}}</select></label>
 <label for="discovery">Discovery <select id="discovery"><option value="">Any</option><option value="title">Has title</option><option value="hosts">Has discovered I2P hosts</option><option value="multiple">Multi-destination hostname</option><option value="incomplete">Link extraction incomplete</option></select></label>

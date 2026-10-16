@@ -43,6 +43,17 @@ public sealed class I2pViewerTests
         Assert.Contains("public destination entries", html);
         Assert.Contains("2026-10-16 00:00:00 UTC", html);
         Assert.Contains("id=\"controls\" hidden", html);
+        Assert.Contains("<label for=\"homepage\">Homepage <select id=\"homepage\">", html);
+        Assert.Contains("<option value=\"200\" selected>HTTP 200 observed</option>", html);
+        Assert.Contains("<option value=\"response\">Any homepage response</option>", html);
+        Assert.Contains("<option value=\"none\">No homepage response</option>", html);
+        Assert.Contains("<option value=\"\">All entries</option>", html);
+        // Filtering is enhancement only: every static row and detail remains present and unhidden.
+        foreach (Match row in Regex.Matches(html, "<tr data-service=[^>]*>"))
+            Assert.DoesNotContain(" hidden", row.Value);
+        var noResponse = scan.Entries.First(e => e.HomepageStatusCode == null);
+        Assert.Contains("data-http=\"\"", html);
+        Assert.Contains("id=\"" + I2pViewerGenerator.Id(noResponse) + "\"", html);
         foreach (Match article in Regex.Matches(html, "<article class=\"card service-detail\"[^>]*>"))
             Assert.DoesNotContain(" hidden", article.Value);
         Assert.DoesNotContain("const scan", html);

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="I2PAtlas/I2PAtlas.csproj" />
+  <Project Path="I2PAtlas.Tests/I2PAtlas.Tests.csproj" />
+</Solution>

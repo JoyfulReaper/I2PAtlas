@@ -162,7 +162,7 @@ The pinned `external/JoyfulReaperLib` submodule supplies only its ntfy project t
 From the repository root:
 
 ```bash
-dotnet build DN42Atlas.slnx
+dotnet build I2PAtlas.slnx
 ```
 
 ## Architecture and Tests

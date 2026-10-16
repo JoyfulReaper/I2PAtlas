@@ -28,9 +28,6 @@ node --test I2PAtlas.Tests/I2pViewerTests.cjs
 
 Automated network tests use fake local HTTP proxies and synthetic destinations;
 they require no I2P router. The Unix file-permission test skips on Windows.
-The unused `external/JoyfulReaperLib` submodule is retained pending dependency
-cleanup; neither application nor test project references it, and it is not needed
-to build or run this pipeline.
 
 ## Workflow
 

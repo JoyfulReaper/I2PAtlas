@@ -307,5 +307,4 @@ the viewer's HTTP-200 default, filtering, sorting, navigation and stable identit
 No automated test requires a real I2P router.
 
 Host-oriented discovery crawling is future work. No frontier, recursive fetching,
-scheduler or deployment package is implemented here. The unused JoyfulReaperLib
-submodule remains for a separate dependency cleanup; it has no build reference.
+scheduler or deployment package is implemented here.

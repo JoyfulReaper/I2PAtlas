@@ -108,3 +108,9 @@ recorded source path, rehash its contents, or authenticate a user-edited snapsho
 No network access, DNS, proxy discovery, router or registry operation occurs in
 the reader. The [single-seed diagnostic](../I2pProbing/README.md#local-proxy-diagnostic)
 uses this reader and requires an explicit existing seed and loopback proxy.
+
+`ReadWithIdentityAsync` returns the same validated snapshot plus SHA-256 and byte
+length of its exact loaded JSON bytes. It hashes the already validated buffer,
+without reopening a path. The [private I2P scan](../I2pScanning/README.md) uses this
+identity; it differs from `source.sha256`, which fingerprints the earlier
+addressbook input. Neither hash authenticates a user-edited file.

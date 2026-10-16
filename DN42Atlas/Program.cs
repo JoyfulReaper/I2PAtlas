@@ -11,7 +11,7 @@ if (command is "--help" or "-h" or "help")
     return 0;
 }
 
-if (command is not ("resolve" or "web-scan" or "report" or "probe-test" or "run" or "registry-update" or "republish" or "publish-existing" or "import-seeds" or "i2p-probe-test"))
+if (command is not ("resolve" or "web-scan" or "report" or "probe-test" or "run" or "registry-update" or "republish" or "publish-existing" or "import-seeds" or "i2p-probe-test" or "i2p-scan"))
 {
     CommandUsage.Print();
     return 2;
@@ -26,6 +26,15 @@ try
     // Explicit I2P integration diagnostic; never construct DN42 policy/discovery.
     if (command == "i2p-probe-test")
         return await I2pProbeTestCommand.ExecuteAsync(args);
+
+    if (command == "i2p-scan")
+    {
+        using var cancellation = new CancellationTokenSource();
+        ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
+        Console.CancelKeyPress += cancel;
+        try { return await I2pScanCommand.ExecuteAsync(args, cancellationToken: cancellation.Token); }
+        finally { Console.CancelKeyPress -= cancel; }
+    }
 
     if (command == "publish-existing" && args.Length != 2)
     {

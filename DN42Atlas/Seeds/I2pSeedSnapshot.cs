@@ -3,6 +3,9 @@ using DN42Atlas.AddressBook;
 
 namespace DN42Atlas.Seeds;
 
+/// <summary>Private identity of the exact validated snapshot file, distinct from its addressbook source hash.</summary>
+public sealed record LoadedSeedSnapshot(I2pSeedSnapshot Snapshot, string FileSha256, long FileByteLength);
+
 /// <summary>Private I2P input state. Never serialize this model into public scan artifacts.</summary>
 public sealed class I2pSeedSnapshot
 {

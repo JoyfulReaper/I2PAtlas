@@ -3,8 +3,8 @@
 `new I2pHttpProbe(transport).ProbeAsync(validatedSeed, cancellationToken)` uses a
 caller-owned `I2pHttpTransport`. It sends `GET /robots.txt`, then conditionally
 `GET /`, with user agent `I2PAtlas/0.1`, to the destination-derived Base32 identity. The explicit diagnostic
-CLI below is available; scanner, multi-seed orchestration, publisher and viewer
-integration remain outside this component.
+CLI below is available. The [bounded private snapshot scanner](../I2pScanning/README.md)
+reuses this component; publisher and viewer integration remain outside it.
 
 ## Observations and authorization
 

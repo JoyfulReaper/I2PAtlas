@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Security.Cryptography;
 using System.Text.Json;
 using DN42Atlas.AddressBook;
 
@@ -11,7 +12,11 @@ public static class SeedSnapshotReader
     // plus JSON framing fits comfortably here without accepting unbounded JSON.
     public const int MaxSnapshotBytes = 32 * 1024 * 1024;
 
-    public static async Task<I2pSeedSnapshot> ReadAsync(string path, CancellationToken cancellationToken = default)
+    public static async Task<I2pSeedSnapshot> ReadAsync(string path, CancellationToken cancellationToken = default) =>
+        (await ReadWithIdentityAsync(path, cancellationToken)).Snapshot;
+
+    /// <summary>Hashes exactly the same bounded file bytes that pass strict validation, without reopening a path.</summary>
+    public static async Task<LoadedSeedSnapshot> ReadWithIdentityAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if ((path.Length >= 2 && (path[0] is '\\' or '/') && (path[1] is '\\' or '/')) ||
@@ -35,7 +40,10 @@ public static class SeedSnapshotReader
         {
             using var document = JsonDocument.Parse(bytes.GetBuffer().AsMemory(0, (int)bytes.Length),
                 new JsonDocumentOptions { MaxDepth = 8 });
-            return Validate(document.RootElement, cancellationToken);
+            var snapshot = Validate(document.RootElement, cancellationToken);
+            var hash = Convert.ToHexString(SHA256.HashData(bytes.GetBuffer().AsSpan(0, (int)bytes.Length)));
+            cancellationToken.ThrowIfCancellationRequested();
+            return new LoadedSeedSnapshot(snapshot, hash, bytes.Length);
         }
         // JsonDocument can defer UTF-8/escaped Unicode decoding until a property
         // name or string is accessed; that failure uses InvalidOperationException.

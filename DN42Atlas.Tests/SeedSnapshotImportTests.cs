@@ -22,7 +22,7 @@ public sealed class SeedSnapshotImportTests
     [TestMethod]
     public async Task ValidImportUsesExplicitI2pSchemaPrivateProvenanceAndImmutableSeeds()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = files.Write("hosts.txt", $"Z.I2P.={Destination}\n A.I2P = {PaddedDestination}\t\nZ.i2p={Destination}");
         var output = Path.Combine(files.DirectoryPath, "seeds.json");
         I2pSeedSnapshot snapshot = await Importer().ImportAsync(input, output);
@@ -66,7 +66,7 @@ public sealed class SeedSnapshotImportTests
     [DataRow(true, "\r")]
     public async Task SourceHashCoversExactBytesIncludingBomCommentsDuplicatesAndWhitespace(bool bom, string newline)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Path.Combine(files.DirectoryPath, "hosts.txt");
         var text = string.Join(newline, "# café", $" example.I2P. = \t{PaddedDestination} \t",
             $"EXAMPLE.i2p={PaddedDestination}", "", "; comment");
@@ -86,7 +86,7 @@ public sealed class SeedSnapshotImportTests
     [TestMethod]
     public async Task FixedClockProducesIdenticalArtifactBytesAndReorderedInputsKeepOrdinalSeedOrder()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = files.Write("hosts.txt", $"Z.I2P={Destination}\nI.I2P={PaddedDestination}\na.i2p={Destination}");
         var output = Path.Combine(files.DirectoryPath, "seeds.json");
         var first = await Importer().ImportAsync(input, output);
@@ -113,7 +113,7 @@ public sealed class SeedSnapshotImportTests
     [DataRow("oversized-line")]
     public async Task FailedValidationPreservesPreviousValidOutputAndSource(string failure)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = files.Write("hosts.txt", $"example.i2p={Destination}");
         var output = Path.Combine(files.DirectoryPath, "seeds.json");
         await Importer().ImportAsync(input, output);
@@ -139,7 +139,7 @@ public sealed class SeedSnapshotImportTests
     [TestMethod]
     public async Task MissingInputDoesNotReplacePreviousOutputOrCreateDirectories()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var output = files.Write("seeds.json", "previous output");
         await Assert.ThrowsExactlyAsync<FileNotFoundException>(() =>
             Importer().ImportAsync(Path.Combine(files.DirectoryPath, "missing.txt"), output));
@@ -150,7 +150,7 @@ public sealed class SeedSnapshotImportTests
     [TestMethod]
     public async Task MissingOrFileShapedOutputDirectoryFailsWithoutCreatingIt()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = files.Write("hosts.txt", $"example.i2p={Destination}");
         var missing = Path.Combine(files.DirectoryPath, "missing");
         await Assert.ThrowsAsync<IOException>(() => Importer().ImportAsync(input, Path.Combine(missing, "seeds.json")));
@@ -166,7 +166,7 @@ public sealed class SeedSnapshotImportTests
     {
         // Root bypasses Unix mode checks. Other accounts exercise the actual directory permission failure.
         if (!OperatingSystem.IsWindows() && Environment.UserName == "root") return;
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = files.Write("hosts.txt", $"example.i2p={Destination}");
         var directory = new DirectoryInfo(Path.Combine(files.DirectoryPath, "private"));
         directory.Create();
@@ -203,7 +203,7 @@ public sealed class SeedSnapshotImportTests
     [TestMethod]
     public async Task FailedReplacementCleansStagingAndPreservesExistingDirectoryContents()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = files.Write("hosts.txt", $"example.i2p={Destination}");
         var output = Path.Combine(files.DirectoryPath, "seeds.json");
         Directory.CreateDirectory(output);
@@ -222,7 +222,7 @@ public sealed class SeedSnapshotImportTests
     [TestMethod]
     public async Task SameInputOutputAndPreCancelledImportNeverOverwriteInputOrOutput()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = files.Write("hosts.txt", $"example.i2p={Destination}");
         var source = await File.ReadAllBytesAsync(input);
         await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
@@ -251,7 +251,7 @@ public sealed class SeedSnapshotImportTests
     [TestMethod]
     public async Task EmptyBookProducesValidEmptyI2pSnapshot()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = files.Write("hosts.txt", "");
         var output = Path.Combine(files.DirectoryPath, "seeds.json");
         var snapshot = await Importer().ImportAsync(input, output);
@@ -264,7 +264,7 @@ public sealed class SeedSnapshotImportTests
     [TestMethod]
     public async Task CliImportsQuotedRelativePathsWithoutDn42PolicyStateOrRegistry()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         files.Write("local hosts.txt", $"EXAMPLE.I2P.={PaddedDestination}");
         var before = Directory.GetFiles(files.DirectoryPath).Order(StringComparer.Ordinal).ToArray();
         var result = await RunCli(files.DirectoryPath, "import-seeds", "local hosts.txt", "private seeds.json");
@@ -293,7 +293,7 @@ public sealed class SeedSnapshotImportTests
     [DataRow("missing-output-directory", 1)]
     public async Task CliUsageAndImportFailuresHaveClearExitCodesAndPreserveOutput(string failure, int code)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         files.Write("hosts.txt", failure switch
         {
             "malformed-input" => "broken",

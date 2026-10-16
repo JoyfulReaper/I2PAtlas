@@ -199,7 +199,7 @@ public sealed class I2pHomepageProbeTests
     [TestMethod]
     public async Task DiagnosticReportsSeparateHomepageFailureAndReturnsNonzero()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = files.Write("seeds.json", SeedSnapshotTestData.Snapshot().ToJsonString());
         await using var proxy = new FakeProxy(n => n == 1 ? Response(200, Allow, Plain) : null);
         using var output = new StringWriter();

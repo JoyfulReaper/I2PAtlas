@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace DN42Atlas.Probing;
+namespace DN42Atlas.Robots;
 
 // Shared policy evaluation only: callers own network provenance and body limits.
 internal static class RobotsPolicy

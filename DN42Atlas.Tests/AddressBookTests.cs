@@ -270,7 +270,7 @@ public sealed class AddressBookTests
     [TestMethod]
     public void LocalFileUsesStrictUtf8AndAbsolutePathProvenance()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = files.Write("hosts.txt", $"example.i2p={Destination}\n");
         Assert.AreEqual(Path.GetFullPath(path), AddressBookParser.ParseFile(path).Source);
         File.WriteAllText(path, $"example.i2p={Destination}", new UTF8Encoding(true));

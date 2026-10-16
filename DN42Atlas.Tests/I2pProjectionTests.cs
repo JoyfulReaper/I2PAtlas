@@ -28,7 +28,7 @@ public sealed class I2pProjectionTests
     [TestMethod]
     public async Task ArtifactFromUnmodifiedScannerPassesReaderAndProjectsBothDestinations()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var export = files.Write("hosts.txt", $"plugins.i2p={SeedSnapshotTestData.Destination(30)}\nplugins.i2p={SeedSnapshotTestData.Destination(31)}");
         var snapshot = Path.Combine(files.DirectoryPath, "seeds.json");
         await new SeedSnapshotImporter().ImportAsync(export, snapshot);
@@ -70,7 +70,7 @@ public sealed class I2pProjectionTests
     [TestMethod]
     public async Task FullRawProjectionIsAnExplicitPublicAllowlistAndPreservesAlternateDestinations()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var raw = Artifact();
         var input = Write(files, raw);
         var original = await File.ReadAllBytesAsync(input);
@@ -118,7 +118,7 @@ public sealed class I2pProjectionTests
     [TestMethod]
     public async Task PublicLinksAreOnlyNormalizedUniqueSortedI2pHostnamesAndTitlesRemainText()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var result = await new I2pProjectionService().ProjectAsync(Write(files, Artifact()), Path.Combine(files.DirectoryPath, "public.json"));
         var page = result.Entries.Single(e => e.Hostname == "page.i2p");
         CollectionAssert.AreEqual(new[] { "abc.b32.i2p", "other.i2p", "target.i2p" }, page.DiscoveredI2pHostnames.ToArray());
@@ -138,7 +138,7 @@ public sealed class I2pProjectionTests
     [TestMethod]
     public async Task SummaryStatesRetainIndependentUnderlyingObservations()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var result = await new I2pProjectionService().ProjectAsync(Write(files, Artifact()), Path.Combine(files.DirectoryPath, "public.json"));
         var entries = result.Entries.ToDictionary(e => (e.Hostname, e.SummaryState));
         Assert.IsTrue(entries.ContainsKey(("page.i2p", I2pPublicSummaryState.HomepageResponseObserved)));
@@ -209,7 +209,7 @@ public sealed class I2pProjectionTests
     [DataRow("duration")]
     public async Task InvalidRawEvidenceFailsExplicitlyAndPreservesExistingPublicFile(string failure)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var node = Node();
         var results = node["results"]!.AsArray();
         var entry = results.Single(r => r!["hostname"]!.GetValue<string>() == "page.i2p")!;
@@ -289,7 +289,7 @@ public sealed class I2pProjectionTests
     [DataRow("invalid-unicode")]
     public async Task MalformedEncodingAndDuplicatePropertiesAreRejectedAtEveryLevel(string failure)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var json = Node().ToJsonString();
         json = failure switch
         {
@@ -314,7 +314,7 @@ public sealed class I2pProjectionTests
     [TestMethod]
     public async Task FileLimitIsCheckedBeforeParsing()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = files.Write("huge.json", "{}");
         using (var file = new FileStream(path, FileMode.Open, FileAccess.Write)) file.SetLength(I2pRawScanReader.MaxArtifactBytes + 1L);
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => I2pRawScanReader.ReadAsync(path));
@@ -326,7 +326,7 @@ public sealed class I2pProjectionTests
     [DataRow("output-is-directory")]
     public async Task CompleteClosedStagingAndReplacementFailuresPreservePreviousArtifact(string failure)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Write(files, Artifact());
         var output = files.Write("public.json", "previous public artifact");
         using var cancellation = new CancellationTokenSource();
@@ -353,7 +353,7 @@ public sealed class I2pProjectionTests
     [TestMethod]
     public async Task EmptyUnknownProbeAndLimitedScansAreSupportedWithoutInventingObservations()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var output = Path.Combine(files.DirectoryPath, "public.json");
         var empty = Artifact([]);
         var result = await new I2pProjectionService().ProjectAsync(Write(files, empty), output);
@@ -373,7 +373,7 @@ public sealed class I2pProjectionTests
     [TestMethod]
     public async Task CommandDispatchIsLocalOnlyAndDoesNotConstructDn42Runtime()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Write(files, Artifact());
         var output = Path.Combine(Directory.CreateDirectory(Path.Combine(files.DirectoryPath, "published")).FullName, "i2p.json");
         var start = new ProcessStartInfo("dotnet") { WorkingDirectory = files.DirectoryPath, RedirectStandardOutput = true,
@@ -403,7 +403,7 @@ public sealed class I2pProjectionTests
     [DataRow("cancel", 130)]
     public async Task CommandFailuresHaveClearExitCodesWithoutPrivateDiagnosticLeaks(string failure, int expected)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = failure == "invalid" ? files.Write("private-raw.json", "PRIVATE_INVALID_INPUT") : Write(files, Artifact());
         var output = files.Write("public.json", "previous public artifact");
         var args = new[] { "i2p-project", failure == "missing-input" ? input + "missing" : input,
@@ -418,7 +418,7 @@ public sealed class I2pProjectionTests
         Assert.AreEqual("previous public artifact", await File.ReadAllTextAsync(output));
     }
 
-    private static string Write(TestFiles files, I2pRawScanArtifact raw) => files.Write("raw.json", JsonSerializer.Serialize(raw, I2pRawScanFile.JsonOptions));
+    private static string Write(TemporaryFiles files, I2pRawScanArtifact raw) => files.Write("raw.json", JsonSerializer.Serialize(raw, I2pRawScanFile.JsonOptions));
     private static JsonNode Node() => JsonNode.Parse(JsonSerializer.Serialize(Artifact(), I2pRawScanFile.JsonOptions))!;
     private static I2pRawScanArtifact Artifact(I2pRawSeedResult[]? custom = null, int? snapshotCount = null, int maximumSeeds = 10000)
     {

@@ -21,7 +21,7 @@ public sealed class I2pProbeTestCommandTests
     [DataRow(500, "proxy error", "UnknownStatus", "SkippedRobotsUnknown")]
     public async Task HttpResponsesReportObservationsAndExplicitHomepageDisposition(int status, string body, string robots, string homepage)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Snapshot(files);
         await using var proxy = new FakeProxy(Response(status, body,
             "Content-Type: text/plain; charset=utf-8\r\nServer: PRIVATE-server\r\nVia: PRIVATE-via\r\nSet-Cookie: secret=PRIVATE-cookie\r\n"));
@@ -48,7 +48,7 @@ public sealed class I2pProbeTestCommandTests
     [DataRow("/?i2paddresshelper=SECRET", "[relative, invalid or unsupported location redacted]")]
     public async Task RedirectsAreRecordedWithSensitivePartsRedactedAndNeverFollowed(string location, string authority)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Snapshot(files);
         await using var proxy = new FakeProxy(Response(302, "", $"Location: {location}\r\n"));
         var result = await Execute(path, "friendly.i2p", proxy.Uri);
@@ -66,7 +66,7 @@ public sealed class I2pProbeTestCommandTests
     [TestMethod]
     public async Task UntrustedHeaderValuesCannotDiscloseDestinationOrInjectTerminalOutput()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Snapshot(files);
         var destination = Seed.Destination;
         await using var proxy = new FakeProxy(Response(302, "",
@@ -82,7 +82,7 @@ public sealed class I2pProbeTestCommandTests
     [TestMethod]
     public async Task ProxyRefusalPrintsBoundedFailureDiagnosticsAndReturnsOne()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Snapshot(files);
         using var reserved = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         reserved.Bind(new IPEndPoint(IPAddress.Loopback, 0));
@@ -98,7 +98,7 @@ public sealed class I2pProbeTestCommandTests
     [TestMethod]
     public async Task ExplicitTimeoutHasDistinctDiagnostics()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Snapshot(files);
         await using var proxy = new FakeProxy(null);
         var result = await Execute(path, "friendly.i2p", proxy.Uri, "--timeout-ms", "300");
@@ -117,7 +117,7 @@ public sealed class I2pProbeTestCommandTests
     [DataRow("ambiguous-hostname")]
     public async Task SelectionAndWholeSnapshotValidationFinishBeforeNetworking(string failure)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var json = SeedSnapshotTestData.Snapshot();
         var seeds = json["seeds"]!.AsArray();
         switch (failure)
@@ -176,7 +176,7 @@ public sealed class I2pProbeTestCommandTests
     [TestMethod]
     public async Task MissingSnapshotErrorsOmitPrivatePathAndCallerCancellationPropagates()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Path.Combine(files.DirectoryPath, "PRIVATE-missing.json");
         var result = await Execute(path, "friendly.i2p", "http://127.0.0.1:4444");
         Assert.AreEqual(1, result.Code);
@@ -196,7 +196,7 @@ public sealed class I2pProbeTestCommandTests
     [TestMethod]
     public async Task CliDispatchUsesQuotedSnapshotPathAndIgnoresDn42AndAmbientProxyConfiguration()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Snapshot(files, "private seeds.json");
         var before = Directory.GetFileSystemEntries(files.DirectoryPath).Order(StringComparer.Ordinal).ToArray();
         await using var proxy = new FakeProxy(Response(200, "User-agent: *\nAllow: /", "Content-Type: text/plain\r\n"));
@@ -217,7 +217,7 @@ public sealed class I2pProbeTestCommandTests
     [DataRow(true)]
     public async Task CliMissingHostnameOrProxyReturnsUsageWithoutDn42Setup(bool proxyMissing)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var result = proxyMissing
             ? await RunCli(files.DirectoryPath, "i2p-probe-test", "missing.json", "friendly.i2p")
             : await RunCli(files.DirectoryPath, "i2p-probe-test", "missing.json", "", "http://127.0.0.1:4444");
@@ -226,7 +226,7 @@ public sealed class I2pProbeTestCommandTests
         Assert.AreEqual("", result.Error);
     }
 
-    private static string Snapshot(TestFiles files, string filename = "seeds.json") =>
+    private static string Snapshot(TemporaryFiles files, string filename = "seeds.json") =>
         files.Write(filename, SeedSnapshotTestData.Snapshot().ToJsonString());
 
     private static async Task<(int Code, string Output, string Error)> Execute(params string[] arguments)

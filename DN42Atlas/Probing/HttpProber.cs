@@ -5,6 +5,8 @@ using DN42Atlas.Registry;
 using DN42Atlas.Networking;
 using DN42Atlas.Policy;
 
+using DN42Atlas.Robots;
+
 namespace DN42Atlas.Probing;
 
 public static class HttpProber

@@ -181,7 +181,7 @@ public sealed class SusiDnsAddressBookTests
     [TestMethod]
     public async Task AlternateDestinationFixtureSurvivesImportAndReadWithoutChangingIdentityOrSourceHash()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         using var stream = AlternateFixture();
         using var memory = new MemoryStream();
         await stream.CopyToAsync(memory);
@@ -239,7 +239,7 @@ public sealed class SusiDnsAddressBookTests
     [TestMethod]
     public async Task ImportFixtureHashesAllOriginalBytesAndKeepsMetadataOutOfSeedJson()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Path.Combine(files.DirectoryPath, "router-export.txt");
         using var fixture = Fixture();
         using var memory = new MemoryStream();

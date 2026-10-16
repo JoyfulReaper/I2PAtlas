@@ -5,6 +5,9 @@
 
 # DN42Atlas generated files
 
+# Private I2P working inputs and scan artifacts (repository root only)
+/private/
+
 # Resolver output
 domain-resolution.json
 

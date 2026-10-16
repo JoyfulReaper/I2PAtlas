@@ -2,7 +2,7 @@ using System.Net.Sockets;
 using System.Text;
 using DN42Atlas.AddressBook;
 using DN42Atlas.I2pTransport;
-using DN42Atlas.Probing;
+using DN42Atlas.Robots;
 
 namespace DN42Atlas.I2pProbing;
 

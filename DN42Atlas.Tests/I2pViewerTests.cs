@@ -26,7 +26,7 @@ public sealed class I2pViewerTests
     [TestMethod]
     public async Task ValidPublicV1ProducesDeterministicCompleteStaticHtmlFromPublicInputOnly()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Write(files);
         var original = await File.ReadAllBytesAsync(input);
         var output = Path.Combine(files.DirectoryPath, "viewer.html");
@@ -80,7 +80,7 @@ public sealed class I2pViewerTests
     [DataRow("null-entries")][DataRow("wrong-boolean")][DataRow("too-many-links")]
     public async Task StrictReaderRejectsMalformedContractWithoutReplacingHtml(string change)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var root = Node();
         var entries = root["entries"]!.AsArray();
         var page = entries.Single(e => e!["summaryState"]!.GetValue<string>() == "HomepageResponseObserved")!;
@@ -142,14 +142,14 @@ public sealed class I2pViewerTests
     [DataRow("{\"schema\":\"i2patlas.public-scan\",\"schema\":\"i2patlas.public-scan\"}")]
     public async Task MalformedJsonAndDuplicatePropertiesAreRejected(string json)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         await Assert.ThrowsAsync<InvalidDataException>(() => I2pPublicScanReader.ReadAsync(files.Write("public.json", json)));
     }
 
     [TestMethod]
     public async Task BoundsEncodingAndNullTypesAreEnforcedWithoutReadingPrivateArtifacts()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = files.Write("oversized.json", "");
         using (var file = new FileStream(input, FileMode.Open, FileAccess.Write)) file.SetLength(I2pPublicScanReader.MaxArtifactBytes + 1L);
         await Assert.ThrowsAsync<InvalidDataException>(() => I2pPublicScanReader.ReadAsync(input));
@@ -164,7 +164,7 @@ public sealed class I2pViewerTests
     [DataRow(true)][DataRow(false)]
     public async Task DuplicatePropertyNamesInOtherwiseValidPublicDocumentsAreRejected(bool rootProperty)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var json = Node().ToJsonString();
         var property = rootProperty ? "schema" : "hostname";
         var value = rootProperty ? "i2patlas.public-scan" : "i2p-javadocs.i2p";
@@ -179,7 +179,7 @@ public sealed class I2pViewerTests
     [DataRow(I2pRobotsObservation.AllowsRoot)][DataRow(I2pRobotsObservation.DisallowsRoot)]
     public async Task EveryPublicRobotsObservationCanBeReadWithItsPublicMeaning(I2pRobotsObservation observation)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var scan = Fixture();
         var entry = scan.Entries[^1] with { RobotsObservation = observation,
             RobotsStatusCode = observation == I2pRobotsObservation.NotObserved ? null : observation == I2pRobotsObservation.Redirect ? 302 :
@@ -266,7 +266,7 @@ public sealed class I2pViewerTests
     [TestMethod]
     public async Task StagedWriteIsClosedAndCompleteBeforeReplacementAndFailuresPreservePreviousHtml()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Write(files);
         var output = files.Write("viewer.html", "previous HTML");
         var observed = false;
@@ -292,7 +292,7 @@ public sealed class I2pViewerTests
     [TestMethod]
     public async Task EmptyAndUnknownObservationsRemainUsable()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var scan = Fixture();
         var unknown = scan.Entries[^1] with { RobotsRequestOutcome = null, RobotsStatusCode = null,
             RobotsObservation = I2pRobotsObservation.NotObserved, RobotsProxyClassification = I2pProxyResponseClassification.Ambiguous,
@@ -311,7 +311,7 @@ public sealed class I2pViewerTests
     [DataRow("invalid", 1)][DataRow("cancel", 130)][DataRow("success", 0)]
     public async Task CommandReportsUsefulErrorsAndPreservesPreviousHtml(string mode, int expected)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Write(files);
         var output = files.Write("viewer.html", "previous HTML");
         using var cancel = new CancellationTokenSource();
@@ -332,7 +332,7 @@ public sealed class I2pViewerTests
     [TestMethod]
     public async Task CliDispatchRequiresOnlyPublicInputWithPrivateConfigurationUnavailable()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Write(files);
         var output = Path.Combine(files.DirectoryPath, "viewer.html");
         var start = new ProcessStartInfo("dotnet") { WorkingDirectory = files.DirectoryPath, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
@@ -350,7 +350,7 @@ public sealed class I2pViewerTests
         Assert.IsFalse(Directory.Exists(Path.Combine(files.DirectoryPath, "config")));
     }
 
-    private static string Write(TestFiles files) => files.Write("public.json", JsonSerializer.Serialize(Fixture(), JsonOptions));
+    private static string Write(TemporaryFiles files) => files.Write("public.json", JsonSerializer.Serialize(Fixture(), JsonOptions));
     private static JsonNode Node() => JsonSerializer.SerializeToNode(Fixture(), JsonOptions)!;
     internal static I2pPublicScan Fixture()
     {

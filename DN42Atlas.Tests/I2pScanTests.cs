@@ -22,7 +22,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task AlternateDestinationsForOneHostnameProduceIndependentDestinationBoundResults()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         using var fixture = SusiDnsAddressBookTests.AlternateFixture();
         using var reader = new StreamReader(fixture, new UTF8Encoding(false, true));
         var export = await reader.ReadToEndAsync();
@@ -72,7 +72,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task MultiSeedScanPreservesEvidenceIdentityOrderingMetricsAndPrivateBoundary()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Snapshot(files, 3);
         var bytes = await File.ReadAllBytesAsync(input);
         var output = Path.Combine(files.DirectoryPath, "scan.json");
@@ -148,7 +148,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task EmptySnapshotProducesValidEmptyArtifactWithoutConnecting()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Snapshot(files, 0);
         await using var proxy = new ScanProxy((_, _) => throw new AssertFailedException("Empty scan must not connect."));
         var scan = await new I2pScanService().ScanAsync(input, Path.Combine(files.DirectoryPath, "scan.json"), proxy.Uri);
@@ -162,7 +162,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task FixedWorkerCountBoundsConcurrencyAndSeedLimitUsesSortedPrefix()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Snapshot(files, 8);
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var two = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -195,7 +195,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task TimedOutSeedDoesNotAbortOtherSeeds()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Snapshot(files, 3);
         var slow = Target(Seeds(3)[0]).DestinationHostname;
         await using var proxy = new ScanProxy((uri, _) => Task.FromResult<byte[]?>(uri.Host == slow ? null : Response(404, "no policy", "text/plain")));
@@ -212,7 +212,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task RefusedProxyStillProducesOneFailureRecordPerSeed()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         using var reserved = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         reserved.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         var scan = await new I2pScanService().ScanAsync(Snapshot(files, 3), Path.Combine(files.DirectoryPath, "scan.json"),
@@ -225,7 +225,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task CancellationStopsWorkersAndPreservesPreviousOutput()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Snapshot(files, 6);
         var output = files.Write("scan.json", "previous valid artifact");
         var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -244,7 +244,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task CompletePrivateStageExistsBeforeAtomicReplacement()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Snapshot(files, 0);
         var output = files.Write("scan.json", "old artifact");
         var observed = false;
@@ -268,7 +268,7 @@ public sealed class I2pScanTests
     [DataRow(true)]
     public async Task CancellationOrIoFailureAfterStagingNeverInstallsPartialOutput(bool cancel)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Snapshot(files, 0);
         var output = files.Write("scan.json", "previous artifact");
         using var cancellation = new CancellationTokenSource();
@@ -287,7 +287,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task GlobalEvidenceBudgetFailurePreservesOutputAndCancelsRemainingWork()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var output = files.Write("scan.json", "previous artifact");
         await using var proxy = new ScanProxy((_, _) => Task.FromResult<byte[]?>(Response(404, "none", "text/plain")));
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => new I2pScanService(null, null, textBudget: 1)
@@ -300,7 +300,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task SerializationFailureRemovesPartialStageAndPreservesPreviousOutput()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var output = Path.Combine(files.DirectoryPath, "scan.json");
         var scan = await new I2pScanService().ScanAsync(Snapshot(files, 0), output, "http://127.0.0.1:4444");
         var previous = await File.ReadAllBytesAsync(output);
@@ -321,7 +321,7 @@ public sealed class I2pScanTests
     [DataRow("site")]
     public async Task UnsafeOutputFailsBeforeNetworkingAndPreservesInput(string failure)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Snapshot(files, 1);
         var original = await File.ReadAllBytesAsync(input);
         var directory = Path.Combine(files.DirectoryPath, failure);
@@ -341,7 +341,7 @@ public sealed class I2pScanTests
     [DataRow("version")]
     public async Task RawEnvelopeRejectsUnsupportedSchemaOrVersion(string property)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var output = Path.Combine(files.DirectoryPath, "scan.json");
         await new I2pScanService().ScanAsync(Snapshot(files, 0), output, "http://127.0.0.1:4444");
         var node = JsonNode.Parse(await File.ReadAllTextAsync(output))!;
@@ -353,7 +353,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task ExactSnapshotHashChangesWithWhitespaceAndSourceProvenanceIsNeverOpened()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Snapshot(files, 1);
         var original = await SeedSnapshotReader.ReadWithIdentityAsync(path);
         await File.AppendAllTextAsync(path, "\n\t ");
@@ -367,7 +367,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task CliUsesExplicitProxyAndKeepsDestinationsOnlyInPrivateArtifact()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         Snapshot(files, 2, "private seeds.json");
         var before = Directory.GetFileSystemEntries(files.DirectoryPath).Order(StringComparer.Ordinal).ToArray();
         await using var proxy = new ScanProxy((_, _) => Task.FromResult<byte[]?>(Response(404, "none", "text/plain")));
@@ -400,7 +400,7 @@ public sealed class I2pScanTests
     [DataRow("invalid-snapshot", 1)]
     public async Task CommandFailuresPreservePreviousArtifactAndDoNotDisclosePrivateInput(string failure, int expected)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = failure == "invalid-snapshot" ? files.Write("seeds.json", "PRIVATE invalid JSON") : Snapshot(files, 1);
         var outputPath = files.Write("scan.json", "previous artifact");
         var args = new List<string> { "i2p-scan", input, outputPath };
@@ -422,7 +422,7 @@ public sealed class I2pScanTests
     [TestMethod]
     public async Task CommandCancellationReturns130AndDoesNotCreateOutput()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var input = Snapshot(files, 0);
         var path = Path.Combine(files.DirectoryPath, "scan.json");
         using var cancellation = new CancellationTokenSource();
@@ -440,7 +440,7 @@ public sealed class I2pScanTests
 
     private static I2pHttpRequestTarget Target(I2pSeed seed) => new(seed, $"http://{seed.Hostname}/robots.txt");
 
-    private static string Snapshot(TestFiles files, int count, string filename = "seeds.json")
+    private static string Snapshot(TemporaryFiles files, int count, string filename = "seeds.json")
     {
         var node = SeedSnapshotTestData.Snapshot();
         node["seeds"] = new JsonArray(Seeds(count).Reverse().Select(s => (JsonNode)new JsonObject
@@ -448,7 +448,7 @@ public sealed class I2pScanTests
         return files.Write(filename, node.ToJsonString());
     }
 
-    private static void AssertNoStaging(TestFiles files) => Assert.IsEmpty(Directory.GetFiles(files.DirectoryPath, ".i2p-scan-*.tmp"));
+    private static void AssertNoStaging(TemporaryFiles files) => Assert.IsEmpty(Directory.GetFiles(files.DirectoryPath, ".i2p-scan-*.tmp"));
     private static byte[] Response(int status, string body, string type) => Encoding.UTF8.GetBytes(
         $"HTTP/1.1 {status} Test\r\nContent-Type: {type}\r\nContent-Length: {Encoding.UTF8.GetByteCount(body)}\r\nConnection: close\r\n\r\n{body}");
 

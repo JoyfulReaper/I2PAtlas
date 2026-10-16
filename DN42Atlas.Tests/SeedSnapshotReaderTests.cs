@@ -9,7 +9,7 @@ public sealed class SeedSnapshotReaderTests
     [TestMethod]
     public async Task ImportedSnapshotRoundTripsWithPrivateProvenanceAndPreservedDestination()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var destination = SeedSnapshotTestData.Destination(payloadLength: 4);
         var source = files.Write("private hosts.txt", $"Z.I2P.={destination}\na.i2p={SeedSnapshotTestData.Destination()}");
         var path = Path.Combine(files.DirectoryPath, "seeds.json");
@@ -54,7 +54,7 @@ public sealed class SeedSnapshotReaderTests
     [DataRow("unknown-field")]
     public async Task InvalidSchemaRequiredFieldsTypesAndSeedsAreRejectedWithoutEchoingPrivateInput(string failure)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var json = SeedSnapshotTestData.Snapshot();
         var entry = json["seeds"]![0]!.AsObject();
         var source = json["source"]!.AsObject();
@@ -95,7 +95,7 @@ public sealed class SeedSnapshotReaderTests
     [DataRow(true)]
     public async Task NormalizedPairsDeduplicateAndAlternateDestinationsSurvive(bool alternate)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var json = SeedSnapshotTestData.Snapshot();
         json["seeds"]!.AsArray().Add(new JsonObject
         {
@@ -117,7 +117,7 @@ public sealed class SeedSnapshotReaderTests
     [DataRow("hostname")]
     public async Task DuplicateJsonPropertiesAreRejected(string property)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var json = SeedSnapshotTestData.Snapshot().ToJsonString();
         var value = property switch
         {
@@ -134,7 +134,7 @@ public sealed class SeedSnapshotReaderTests
     [TestMethod]
     public async Task EmptySnapshotsRemainValidAndEntriesAreBoundedBeforeDeduplication()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var json = SeedSnapshotTestData.Snapshot();
         json["seeds"] = new JsonArray();
         var path = files.Write("seeds.json", json.ToJsonString());
@@ -150,7 +150,7 @@ public sealed class SeedSnapshotReaderTests
     [TestMethod]
     public async Task OversizedSnapshotFailsBeforeReadingPayload()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Path.Combine(files.DirectoryPath, "oversized.json");
         using (var stream = File.Create(path)) stream.SetLength(SeedSnapshotReader.MaxSnapshotBytes + 1L);
         var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => SeedSnapshotReader.ReadAsync(path));
@@ -163,7 +163,7 @@ public sealed class SeedSnapshotReaderTests
     [DataRow("{\"nested\":[[[[[[[[[0]]]]]]]]]}")]
     public async Task MalformedOrDeepJsonCannotEscapeValidation(string json)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = files.Write("bad.json", json);
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => SeedSnapshotReader.ReadAsync(path));
     }
@@ -173,7 +173,7 @@ public sealed class SeedSnapshotReaderTests
     [DataRow(true)]
     public async Task InvalidUtf8OrUnpairedUnicodeEscapesAreRejected(bool escaped)
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var json = SeedSnapshotTestData.Snapshot().ToJsonString()
             .Replace("friendly.i2p", escaped ? "\\uD800.i2p" : "\u00FF.i2p", StringComparison.Ordinal);
         var path = Path.Combine(files.DirectoryPath, "bad-encoding.json");
@@ -195,7 +195,7 @@ public sealed class SeedSnapshotReaderTests
     [TestMethod]
     public async Task MissingFileAndCallerCancellationRemainDistinguishable()
     {
-        using var files = new TestFiles();
+        using var files = new TemporaryFiles();
         var path = Path.Combine(files.DirectoryPath, "absent.json");
         await Assert.ThrowsExactlyAsync<FileNotFoundException>(() => SeedSnapshotReader.ReadAsync(path));
         using var cancellation = new CancellationTokenSource();

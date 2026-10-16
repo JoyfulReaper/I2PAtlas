@@ -1,7 +1,8 @@
 # Isolated I2P HTTP transport
 
-This component is not connected to CLI dispatch, seed import, `HttpProber`, robots,
-homepage fetching or scanning. It exposes a reusable, disposable GET transport;
+This component is not connected to CLI dispatch, seed import, DN42 `HttpProber`
+or scanning. The isolated [single-seed probe](../I2pProbing/README.md) uses it for
+robots observations. It exposes a reusable, disposable GET transport;
 constructing it and validating a target perform no network access. Only an explicit
 `GetAsync` call sends a request. Tests use synthetic destinations and local fake
 HTTP proxies; no I2P router or Internet service is required.

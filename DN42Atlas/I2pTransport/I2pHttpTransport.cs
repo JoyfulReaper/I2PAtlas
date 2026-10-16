@@ -55,7 +55,12 @@ public sealed class I2pHttpTransport : IDisposable
     }
 
     /// <summary>Returns all proxy status codes unchanged. Caller owns the buffered response and must dispose it.</summary>
-    public async Task<HttpResponseMessage> GetAsync(I2pHttpRequestTarget target, CancellationToken cancellationToken = default)
+    public Task<HttpResponseMessage> GetAsync(I2pHttpRequestTarget target, CancellationToken cancellationToken = default) =>
+        GetAsync(target, null, cancellationToken);
+
+    // A fixed crawler identity for the probe; no public arbitrary-header surface.
+    internal async Task<HttpResponseMessage> GetAsync(I2pHttpRequestTarget target, string? userAgent,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(target);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -66,11 +71,16 @@ public sealed class I2pHttpTransport : IDisposable
             VersionPolicy = HttpVersionPolicy.RequestVersionExact
         };
         request.Headers.Host = target.DestinationHostname;
+        if (userAgent != null) request.Headers.UserAgent.ParseAdd(userAgent);
         try
         {
             // Buffer within a fixed cap so the same deadline/cancellation covers both
             // headers and body. Returning headers alone would let body reads hang later.
             return await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, deadline.Token);
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException("I2P request canceled by caller.", ex, cancellationToken);
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
         {

@@ -1,4 +1,2 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-dn42atlas-request-admin text eol=lf
-deploy-optout.sh text eol=lf

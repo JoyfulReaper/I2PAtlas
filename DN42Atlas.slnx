@@ -1,5 +1,4 @@
 <Solution>
   <Project Path="DN42Atlas/DN42Atlas.csproj" />
-  <Project Path="DN42Atlas.OptOut/DN42Atlas.OptOut.csproj" />
   <Project Path="DN42Atlas.Tests/DN42Atlas.Tests.csproj" />
 </Solution>

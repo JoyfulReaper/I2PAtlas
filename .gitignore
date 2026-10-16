@@ -16,7 +16,6 @@ results/
 
 # Published static output
 published/
-published-optout/
 
 # User-specific files
 *.rsuser

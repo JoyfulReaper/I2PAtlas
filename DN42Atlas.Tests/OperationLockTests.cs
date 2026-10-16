@@ -1,11 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using DN42Atlas.Commands;
-using DN42Atlas.OptOut.Exclusions;
-using DN42Atlas.OptOut.Web;
 using DN42Atlas.Policy;
 using DN42Atlas.Publishing;
-using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace DN42Atlas.Tests;
 
@@ -117,115 +114,6 @@ public sealed class OperationLockTests
             if (!process.HasExited) process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync();
         }
-    }
-
-    [TestMethod]
-    [DataRow("run")]
-    [DataRow("republish")]
-    public async Task PublisherCannotOverlapAnOptOutMutation(string command)
-    {
-        using var f = await MutationFixture.CreateAsync();
-        File.WriteAllText(f.Paths.Hosts, "other.dn42");
-        InstallConfig(f.Files);
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var coordinator = f.CreateCoordinator(async _ =>
-        {
-            entered.SetResult();
-            await release.Task;
-            await RuntimeExclusionMaterializer.MaterializeAsync(f.Store, f.Paths.Runtime);
-        });
-        var mutation = coordinator.ExcludeAsync(f.Identity, "Domain", "owned.dn42");
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        using var process = StartCli(f.Files.DirectoryPath, f.Paths.State, f.Paths.Runtime,
-            Path.Combine(f.Files.DirectoryPath, "registry"), [command]);
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        try
-        {
-            Assert.AreEqual("Waiting for Atlas operation lock.",
-                await process.StandardError.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(15)));
-            Assert.IsFalse(process.HasExited);
-            f.AssertListingWithdrawn();
-            release.SetResult();
-            Assert.AreEqual(MutationStatus.Success, await mutation.WaitAsync(TimeSpan.FromSeconds(5)));
-            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
-            Assert.AreEqual(0, process.ExitCode, await stdout + await process.StandardError.ReadToEndAsync());
-            Assert.IsEmpty(JsonNode.Parse(File.ReadAllText(Path.Combine(f.Paths.Published, "latest.json")))!["Results"]!.AsArray());
-        }
-        finally
-        {
-            release.TrySetResult();
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync();
-            await mutation;
-        }
-    }
-
-    [TestMethod]
-    [DataRow("exclude")]
-    [DataRow("include")]
-    public async Task WebContentionReturns503WithoutMutatingAnyState(string operation)
-    {
-        using var f = await MutationFixture.CreateAsync();
-        if (operation == "include") Assert.AreEqual(MutationStatus.Success, await f.Coordinator.ExcludeAsync(f.Identity, "Domain", "owned.dn42"));
-        var post = await f.ConfirmedPostAsync(operation, "Domain", "owned.dn42");
-        var paths = new[] { f.DbPath, f.RawPath, f.Paths.State, f.Paths.Runtime,
-            Path.Combine(f.Paths.Published, "index.html"), Path.Combine(f.Paths.Published, "latest.json") };
-        var before = paths.Select(File.ReadAllBytes).ToArray();
-        using var owner = await AtlasOperationLock.AcquireAsync(f.Paths.State, f.Paths.Published);
-        var elapsed = Stopwatch.StartNew();
-        var result = (ContentHttpResult)await OperatorEndpoints.PostAsync(post, f.Antiforgery, f.Coordinator);
-        Assert.AreEqual(503, result.StatusCode);
-        Assert.Contains("Please retry shortly", result.ResponseContent!);
-        Assert.AreEqual("30", post.Response.Headers.RetryAfter.ToString());
-        Assert.IsTrue(elapsed.Elapsed < TimeSpan.FromSeconds(5));
-        Assert.IsFalse(RestrictiveReconciliationFence.IsPending(f.Paths));
-        for (var i = 0; i < paths.Length; i++) CollectionAssert.AreEqual(before[i], File.ReadAllBytes(paths[i]));
-    }
-
-    [TestMethod]
-    [DataRow(true)]
-    [DataRow(false)]
-    public async Task StartupAndMaintenanceRecoveryWaitForOwnershipWithoutNestedDeadlock(bool startup)
-    {
-        using var f = await MutationFixture.CreateAsync();
-        RestrictiveReconciliationFence.Establish(f.Paths);
-        var runtime = File.ReadAllBytes(f.Paths.Runtime);
-        var html = File.ReadAllBytes(Path.Combine(f.Paths.Published, "index.html"));
-        using var owner = await AtlasOperationLock.AcquireAsync(f.Paths.State, f.Paths.Published);
-        var reconciler = new ExclusionReconciler(f.Store, f.Paths, Microsoft.Extensions.Logging.Abstractions.NullLogger<ExclusionReconciler>.Instance);
-        Task recovery = startup ? reconciler.RecoverPendingAsync() : reconciler.ReconcileAsync();
-        await Task.Delay(100);
-        Assert.IsFalse(recovery.IsCompleted);
-        CollectionAssert.AreEqual(runtime, File.ReadAllBytes(f.Paths.Runtime));
-        CollectionAssert.AreEqual(html, File.ReadAllBytes(Path.Combine(f.Paths.Published, "index.html")));
-        owner.Dispose();
-        await recovery.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.IsFalse(RestrictiveReconciliationFence.IsPending(f.Paths));
-    }
-
-    [TestMethod]
-    public void SystemdTemplatesKeepCrawlerEnvironmentAndPreviewSeparate()
-    {
-        var root = FindRepositoryRoot();
-        var service = File.ReadAllText(Path.Combine(root, "deployment", "systemd", "dn42atlas-run.service"));
-        var timer = File.ReadAllText(Path.Combine(root, "deployment", "systemd", "dn42atlas-run.timer"));
-        foreach (var directive in new[] { "Type=oneshot", "User=joyfulreaper", "Group=joyfulreaper", "WorkingDirectory=/opt/DN42Atlas",
-            "Environment=HOME=/home/joyfulreaper", "EnvironmentFile=/home/joyfulreaper/.config/dn42atlas/crawler.env",
-            "TimeoutStartSec=3h", "NoNewPrivileges=true", "PrivateTmp=true", "--no-launch-profile -- run" })
-            Assert.Contains(directive, service);
-        Assert.DoesNotContain("oidc.env", service);
-        Assert.DoesNotContain("nginx", service);
-        Assert.Contains("OnCalendar=*-*-* 01:30:00", timer);
-        Assert.Contains("Persistent=true", timer);
-        Assert.Contains("RandomizedDelaySec=15m", timer);
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "DN42Atlas.slnx"))) directory = directory.Parent;
-        return directory?.FullName ?? throw new InvalidOperationException("Repository root not found.");
     }
 
     private static void InstallConfig(TestFiles files)

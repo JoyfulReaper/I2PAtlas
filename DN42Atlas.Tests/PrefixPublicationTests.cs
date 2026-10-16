@@ -4,7 +4,6 @@ using DN42Atlas.Commands;
 using DN42Atlas.Policy;
 using DN42Atlas.Publishing;
 using DN42Atlas.Reporting;
-using DN42Atlas.OptOut.Exclusions;
 
 namespace DN42Atlas.Tests;
 
@@ -225,26 +224,6 @@ public sealed class PrefixPublicationTests
         CollectionAssert.AreEqual(original, File.ReadAllBytes(raw));
     }
 
-    [TestMethod]
-    [DataRow("IPv4Prefix", "172.20.16.0/24")]
-    [DataRow("IPv6Prefix", "fd42:1234::/48")]
-    public async Task LegacyPrefixMutationKeepsRuntimeExclusionAndWithdrawsPublication(string type, string value)
-    {
-        using var f = await MutationFixture.CreateAsync();
-        var scan = JsonNode.Parse(File.ReadAllText(f.RawPath))!;
-        foreach (var row in scan["Results"]!.AsArray()) row!.AsObject().Remove("ProbeAddresses");
-        File.WriteAllText(f.RawPath, scan.ToJsonString());
-        await ArtifactPublisher.PublishAsync(f.RawPath, f.Paths.Published, f.Files.LoadPolicy(), f.Paths.State);
-        var original = File.ReadAllBytes(f.RawPath);
-        Assert.AreEqual(MutationStatus.RecordedPublicationWithdrawn,
-            await f.Coordinator.ExcludeAsync(f.Identity, type, value));
-        Assert.HasCount(1, await f.Store.GetActiveAsync());
-        Assert.IsTrue(f.Files.LoadPolicy(f.Paths.Runtime).IsPrefixExcluded(value));
-        f.AssertListingWithdrawn();
-        CollectionAssert.AreEqual(original, File.ReadAllBytes(f.RawPath));
-        Assert.AreEqual(ReconciliationStatus.PublicationWithdrawn, await f.Coordinator.ReconcileAsync());
-        f.AssertListingWithdrawn();
-    }
 
     [TestMethod]
     public async Task UnsafeLegacyReportFailsWithoutLeavingOldHtmlOrChangingRaw()

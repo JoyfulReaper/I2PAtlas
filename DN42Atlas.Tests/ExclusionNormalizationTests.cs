@@ -1,5 +1,4 @@
 using System.Net.Sockets;
-using DN42Atlas.OptOut.Exclusions;
 using DN42Atlas.Policy;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -40,21 +39,4 @@ public sealed class ExclusionNormalizationTests
                 AddressFamily.InterNetworkV6));
     }
 
-    [TestMethod]
-    public async Task PrefixFamilyMustMatchResourceType()
-    {
-        using var files = new TestFiles();
-        var databasePath = Path.Combine(files.DirectoryPath, "exclusions.db");
-        await ExclusionStore.InitializeAsync(databasePath);
-        var store = new ExclusionStore(databasePath);
-
-        await Assert.ThrowsExactlyAsync<FormatException>(() => store.AddAsync(
-            ExclusionStoreTests.NewRecord(
-                ExclusionResourceType.IPv4Prefix,
-                "fd00:1234::/48")));
-        await Assert.ThrowsExactlyAsync<FormatException>(() => store.AddAsync(
-            ExclusionStoreTests.NewRecord(
-                ExclusionResourceType.IPv6Prefix,
-                "172.20.1.0/24")));
-    }
 }

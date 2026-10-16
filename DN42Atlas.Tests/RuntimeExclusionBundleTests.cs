@@ -1,4 +1,3 @@
-using DN42Atlas.OptOut.Exclusions;
 using DN42Atlas.Policy;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -7,40 +6,6 @@ namespace DN42Atlas.Tests;
 [TestClass]
 public sealed class RuntimeExclusionBundleTests
 {
-    [TestMethod]
-    public async Task ActiveRulesMaterializeWithoutAuditData()
-    {
-        using var files = new TestFiles();
-        var databasePath = Path.Combine(files.DirectoryPath, "exclusions.db");
-        await ExclusionStore.InitializeAsync(databasePath);
-        var store = new ExclusionStore(databasePath);
-        await store.AddAsync(ExclusionStoreTests.NewRecord(
-            ExclusionResourceType.Domain,
-            "Example.DN42."));
-        await store.AddAsync(ExclusionStoreTests.NewRecord(
-            ExclusionResourceType.IPv4Prefix,
-            "172.20.1.77/24"));
-        await store.AddAsync(ExclusionStoreTests.NewRecord(
-            ExclusionResourceType.IPv6Prefix,
-            "fd00:1234:0:1::1/48"));
-
-        await RuntimeExclusionMaterializer.MaterializeAsync(
-            store,
-            files.RuntimePath);
-
-        var bundle = RuntimeExclusionBundle.Load(files.RuntimePath);
-        CollectionAssert.AreEqual(
-            new[] { "example.dn42" },
-            bundle.HostRules.ToArray());
-        CollectionAssert.AreEqual(
-            new[] { "172.20.1.0/24", "fd00:1234::/48" },
-            bundle.PrefixRules.ToArray());
-        var json = File.ReadAllText(files.RuntimePath);
-        Assert.DoesNotContain("auth42-subject", json);
-        Assert.DoesNotContain("JOYFULREAPER-MNT", json);
-        Assert.DoesNotContain("4242420425", json);
-        Assert.DoesNotContain("0123456789abcdef", json);
-    }
 
     [TestMethod]
     public async Task RepeatedAtomicMaterializationLeavesCompleteValidJson()

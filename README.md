@@ -24,6 +24,7 @@ The dependency-free viewer script tests use Node.js:
 
 ```text
 node --test I2PAtlas.Tests/I2pViewerTests.cjs
+node --test I2PAtlas.Tests/I2pCrawlViewerTests.cjs
 ```
 
 Automated network tests use fake local HTTP proxies and synthetic destinations;
@@ -83,18 +84,19 @@ Output is **private raw-crawl data**. Project its public allowlist locally with:
 
 ```text
 dotnet run --project I2PAtlas -- i2p-crawl-project private/results/i2p-crawl.json published/i2p-crawl.json
+dotnet run --project I2PAtlas -- i2p-crawl-view published/i2p-crawl.json published/i2p-crawl.html
 ```
 
-This writes `i2patlas.public-crawl` v1, preserving distinct known-seed and
-host-only discovered entries. Viewer/HTML support for crawl reports is not yet
-implemented. Existing `i2p-project` and `i2p-view` remain scan-only and reject
-crawl artifacts.
+Projection writes `i2patlas.public-crawl` v1, preserving distinct known-seed and
+host-only discovered entries. The separate crawl viewer generates a standalone
+inspection report from that validated public artifact. Existing `i2p-project`
+and `i2p-view` remain scan-only and reject crawl artifacts.
 
 Only the diagnostic, scan and crawl perform networking. Import, projection and viewer
 generation are local transformations. Generating public files does not deploy
 or serve them.
 
-The executable's help branding is `i2patlas`. It has exactly seven commands:
+The executable's help branding is `i2patlas`. It has exactly eight commands:
 
 | Command | Required arguments | Options |
 | --- | --- | --- |
@@ -105,6 +107,7 @@ The executable's help branding is `i2patlas`. It has exactly seven commands:
 | `i2p-project` | private raw file, public output file | None |
 | `i2p-crawl-project` | private raw-crawl file, public-crawl output file | None |
 | `i2p-view` | public input file, HTML output file | None |
+| `i2p-crawl-view` | public-crawl input file, HTML output file | None |
 
 Scan defaults are concurrency **2**, **10000 ms per request**, and at most
 **10000 seeds**. `--max-seeds` takes a prefix in normalized hostname then
@@ -114,7 +117,7 @@ depth-1 requests. The diagnostic also defaults to 10000 ms per request.
 
 No arguments, `help`, `--help` or `-h` show usage and exit 0 without networking or
 file mutation. Unknown commands exit 2. Command-specific error/exit details are in
-the component documentation below. For `i2p-scan`, `i2p-crawl`, both projection commands and `i2p-view`,
+the component documentation below. For `i2p-scan`, `i2p-crawl`, both projection and both viewer commands,
 Ctrl+C requests cancellation and returns 130 if cancellation is handled before
 final replacement.
 
@@ -193,7 +196,7 @@ address-helper links are omitted from extraction.
 | `i2patlas.raw-scan` v1 | **Private** per-seed robots/homepage evidence, destinations, timings, proxy/settings and input provenance |
 | `i2patlas.raw-crawl` v1 | **Private** separate known-seed and terminal host-only evidence, structured parent identities, frontier counts and operational provenance |
 | `i2patlas.public-scan` v1 | Explicitly allowlisted friendly/B32 names, scan-level times, observations, bounded titles and discovered I2P hostnames |
-| `i2patlas.public-crawl` v1 | Separate known-seed and host-only entries, crawl-level times, observations, sanitized titles/media types, I2P hostname lists and exact parent hostname+B32 references; no viewer yet |
+| `i2patlas.public-crawl` v1 | Separate known-seed and host-only entries, crawl-level times, observations, sanitized titles/media types, I2P hostname lists and exact parent hostname+B32 references; input to the crawl inspection viewer |
 
 Keep seed/raw files outside every served directory. `/private/` is ignored by
 Git. Raw output rejects path components named `published`, `public`, `wwwroot` or
@@ -203,8 +206,8 @@ Projection strictly validates raw v1 before selecting public fields. Base64
 destinations, source paths/hashes, proxy details, settings, private errors,
 per-seed timings, redirects and full discovered URLs are omitted. B32 identities
 are intentionally public. Projection does not turn an observation into an
-authenticated-origin claim. The viewer accepts **only public-scan v1**, never
-seed or raw artifacts.
+authenticated-origin claim. `i2p-view` accepts **only public-scan v1**;
+`i2p-crawl-view` accepts **only public-crawl v1**. Neither accepts seed or raw artifacts.
 
 Crawl projection strictly validates raw-crawl v1 and its staged public-crawl v1
 output before replacement. It omits operational provenance, destinations, proxy
@@ -232,13 +235,21 @@ visitor's addressbook resolution; destination-derived B32 links are also
 available. Browser access needs the visitor's own I2P setup and does not inherit
 the scanner's proxy configuration.
 
+The separate crawl inspection viewer initially shows every public entry, with
+kind, hostname, depth, title, summary, homepage HTTP and referrer columns. Known
+destination B32 and exact parent identities are visible in complete detail
+sections. Optional JavaScript adds hostname/title search, Kind and Summary filters,
+four column sorts and reset. Filters affect only directory rows; all details and
+native deep links remain available without JavaScript. It uses no remote assets
+or network fetches. This is a local CLI pipeline, not deployment or hosting automation.
+
 ## Current limitations
 
 - Proxy responses are unauthenticated; a proxy could imitate plausible robots.
 - Only target HTTP/80 is supported. Conservative robots handling skips some sites
   whose homepages might otherwise be useful to observe.
 - `i2p-scan` stays snapshot-only. The separate private crawler stops at depth 1;
-  there is no deeper recursion, crawl viewer or application retry loop.
+  there is no deeper recursion or application retry loop.
 - There is no scheduler, deployment package or hosting command.
 - Addressbook quality affects coverage, and friendly-name resolution can differ
   between addressbooks. Routing by B32 does not provide friendly-name virtual hosting.

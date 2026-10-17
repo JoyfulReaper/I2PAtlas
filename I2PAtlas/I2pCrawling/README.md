@@ -3,7 +3,7 @@
 `i2p-crawl` runs a private, bounded depth-0 seed wave followed by a terminal depth-1
 host-only wave. The existing Crawler 1a selector remains a pure offline component.
 The separate local `i2p-crawl-project` command now projects validated raw-crawl
-into public-crawl v1. There is no crawl viewer. Existing `i2p-project` and
+into public-crawl v1, then `i2p-crawl-view` generates standalone inspection HTML. Existing `i2p-project` and
 `i2p-view` reject crawl input. Nothing below authenticates response origin.
 
 ```text
@@ -101,8 +101,8 @@ destinations, snapshot/source provenance, proxy identity, settings, private erro
 durations, raw metrics, redirects and full URLs. The strict public reader and
 staged writer enforce the public schema before replacement. See
 [publishing](../I2pPublishing/README.md#public-crawl-v1) for exact fields and limits.
-Viewer/HTML integration remains for Crawler 2b; existing scan projection/viewer
-commands do not accept raw-crawl or public-crawl data.
+The separate `i2p-crawl-view` command accepts public-crawl v1 for local inspection;
+existing scan projection/viewer commands do not accept raw-crawl or public-crawl data.
 
 ## Bounds and strict installation
 

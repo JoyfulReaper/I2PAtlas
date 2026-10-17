@@ -1,7 +1,7 @@
 # I2PAtlas architecture
 
-I2PAtlas has seven explicit CLI commands: a snapshot-to-viewer pipeline and a
-separate one-hop crawl/public-projection path. There is no hosted service or deployment layer.
+I2PAtlas has eight explicit CLI commands: separate scan and one-hop crawl
+pipelines through public projection to standalone HTML. There is no hosted service or deployment layer.
 
 ```text
 local effective addressbook export
@@ -33,7 +33,7 @@ i2p-crawl: strict seed loading -> selected known-seed probe wave
             -> pure bounded frontier selection using full snapshot suppression
             -> terminal host-only probe wave -> private i2patlas.raw-crawl v1
             -> i2p-crawl-project -> public i2patlas.public-crawl v1
-            (no crawl viewer/HTML integration yet)
+            -> i2p-crawl-view -> standalone crawl inspection HTML
 ```
 
 ## Trust boundaries
@@ -50,7 +50,7 @@ robots response authenticates the response author. `I2pOriginEvidence` stays
 
 Seed snapshots and raw scan/crawl artifacts are private operational data. The explicit
 scan and crawl projections are explicit allowlist boundaries into their respective
-public schemas. The existing viewer accepts only public-scan and encodes text again for HTML.
+public schemas. Each viewer accepts only its own public schema and encodes text again for HTML.
 No artifact's existence asserts origin authenticity.
 
 ## Addressbook import and seed identity
@@ -266,7 +266,7 @@ the wave barrier without reopening source files or claiming origin proof.
 The private writer flushes and closes a bounded staged file, strictly validates
 its bytes, then checks cancellation and replaces the output. No partial final
 artifact is installed. Existing raw-scan/public-scan schemas stay unchanged;
-`i2p-project` and `i2p-view` reject crawl artifacts. Crawl viewer support is not implemented yet.
+`i2p-project` and `i2p-view` reject crawl artifacts; the crawl commands remain separate.
 
 `i2p-crawl-project` is a separate purely local path through the unchanged strict
 `I2pRawCrawlReader`, `I2pPublicCrawlProjector` and staged `I2pCrawlProjectionService`.
@@ -287,7 +287,7 @@ canonical identities/order, valid kind-specific shapes/depths/referrers, matchin
 counts, UTC times, consistent observations/gates and public metadata bounds.
 The 128 MiB staged public file is flushed, closed and strictly read before final
 replacement. Failure or cancellation before replacement preserves previous output.
-This creates local JSON only; no viewer, deployment or network access is involved.
+Projection creates local JSON only, with no deployment or network access.
 
 ## Strict raw reader and public projection
 
@@ -342,6 +342,44 @@ visitor's addressbook; B32 links preserve the displayed destination identity.
 They use HTTP root URLs with no reconstructed private paths/queries. The
 browser does not inherit the scan proxy setting.
 
+## Standalone crawl inspection viewer
+
+`i2p-crawl-view` uses the separate `I2pCrawlViewerGenerator` and embedded
+`crawl-viewer.html`; it never guesses between schemas or changes the scan viewer.
+Its only input boundary is the unchanged strict `I2pPublicCrawlReader`.
+No private reader, crawler or transport is constructed. The page shows the crawl
+UTC interval, known/discovered/total counts, homepage responses observed and title
+counts. All entries and complete public observations are rendered statically.
+Known seeds retain visible destination B32; discovered hosts retain their host
+form and exact parent hostname+B32, never an invented destination identity.
+
+Detail IDs are `i2p-crawl-entry-` plus lowercase SHA-256 of UTF-8 identity material:
+
+```text
+KnownSeed\n<hostname>\n<destinationHostname>
+DiscoveredHost\n<hostname>\n<referrerHostname>\n<referrerDestinationHostname>
+```
+
+Observations, times and array position do not affect IDs. Native detail and parent
+anchors work with JavaScript disabled. Enhancement only searches hostname/title,
+filters Kind/Summary and sorts directory rows by hostname, kind, summary or numeric
+homepage HTTP. Reset clears filters and retains sorting; missing HTTP statuses
+sort last in either direction. All entries are initially shown. Details are never
+hidden by enhancement, so filtered rows cannot make deep links inaccessible.
+There is no History API, random selection, clipboard feature or extra keyboard
+navigation. An enhancement failure restores all directory rows and disables controls.
+
+Every public string is HTML-encoded again. Links validate canonical `.i2p` syntax
+and use only explicit HTTP root anchors with `_blank`/`noopener noreferrer`.
+The report has a restrictive CSP, data favicon, no remote assets, no fetch and no
+public JSON in executable code. Unicode and literal title markup remain text.
+The complete HTML, including encoded attributes, details and template, is bounded
+to 64 Mi UTF-16 characters. Rendering completes before exclusive private staging,
+async/disk flush, close, cancellation check and same-filesystem replacement.
+Input/output use the existing explicit-local-path and reparse-point policy.
+Validation, rendering, I/O and observed cancellation before replacement preserve
+previous HTML. This is local generation, not a hosted service or deployment step.
+
 ## File installation, failures and cancellation
 
 All output paths are explicit and output directories must already exist.
@@ -364,7 +402,7 @@ multi-file transaction, checkpoint system or cross-process lock. Strict path
 checks do not detect every hard-link alias or coordinate simultaneous writers.
 
 The scan cancels in-flight requests and stops workers on caller cancellation.
-`Program.cs` installs Ctrl+C handlers for scan, crawl, both projection and viewer commands;
+`Program.cs` installs Ctrl+C handlers for scan, crawl, both projection and both viewer commands;
 they return 130 when cancellation is handled. Import/probe APIs accept cancellation
 tokens, but their CLI dispatch has no equivalent graceful Ctrl+C handler.
 
@@ -384,5 +422,4 @@ replacement failures, projection privacy and viewer generation. Node tests cover
 the viewer's HTTP-200 default, filtering, sorting, navigation and stable identities.
 No automated test requires a real I2P router.
 
-Crawling beyond depth 1 and crawl viewer/HTML integration remain
-future work. There is no scheduler or deployment package.
+Crawling beyond depth 1 remains future work. There is no scheduler or deployment package.

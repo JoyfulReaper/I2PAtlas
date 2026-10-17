@@ -90,3 +90,94 @@ Tests:
     node --test I2PAtlas.Tests/I2pViewerTests.cjs
 
 The Node tests use DOM fixtures for behavior; use a browser for layout checks.
+
+## Standalone crawl inspection
+
+The crawl viewer is a separate generator and template. Existing `i2p-view`
+continues accepting only public-scan v1 with its unchanged behavior and HTTP-200
+default. The new command accepts only validated public-crawl v1:
+
+```text
+dotnet run --project I2PAtlas -- i2p-crawl-view <public-crawl-file> <html-output-file>
+```
+
+The completed local CLI pipeline is:
+
+```text
+private seed snapshot
+    -> i2p-crawl
+    -> private i2patlas.raw-crawl v1
+    -> i2p-crawl-project
+    -> public i2patlas.public-crawl v1
+    -> i2p-crawl-view
+    -> standalone crawl HTML report
+```
+
+`I2pCrawlViewerGenerator` calls only the existing strict `I2pPublicCrawlReader` for
+input. It never opens a seed/raw artifact or initializes crawling/networking.
+Both paths must be explicit local files and differ. The output directory must
+exist; URL, UNC/device and reparse-point paths/ancestors reject using the existing
+local projection/viewer policy. Exit codes are 0 installed, 2 arguments/paths,
+1 invalid public input/render/I/O failure and 130 caller cancellation. Ctrl+C
+requests cancellation. CLI diagnostics contain counts and generic errors without
+input values or paths, and do not imply verification.
+
+The report shows crawl start/completion UTC, known/discovered/total counts,
+homepage-response and title counts, and a complete directory with Kind, Hostname,
+Depth, Title, Summary state, Homepage HTTP and Referrer columns. Known seeds are
+depth 0, with friendly and destination-derived B32 links/details and no referrer.
+Discovered entries are depth 1, with HostForm, their actual hostname and exact
+parent hostname+B32. The parent's B32 distinguishes alternate known destinations;
+it is never presented as a destination identity of the child.
+
+Each detail contains all public observation fields: summary, robots outcome/
+classification/observation/status, homepage attempt/outcome/classification/status,
+content type, title, discovered I2P hostnames and extraction-incomplete flag.
+Unknown nullable state is shown as Not observed. HTTP statuses, including errors,
+are observations through an unauthenticated proxy, not liveness/ownership/origin
+authentication. Friendly discovered hosts depend on router/addressbook resolution.
+
+Stable detail IDs are `i2p-crawl-entry-` plus lowercase SHA-256 of UTF-8:
+
+```text
+KnownSeed\n<hostname>\n<destinationHostname>
+DiscoveredHost\n<hostname>\n<referrerHostname>\n<referrerDestinationHostname>
+```
+
+Array position, crawl times, title, status and other observations do not affect
+IDs. Each detail links back to the directory; discovered entries link to their
+exact known parent's detail. All rows/details are statically rendered and native
+anchors work without JavaScript. The static report does not hide detail sections.
+
+The modest enhancement starts with every entry visible, clears restored filter
+values, and adds case-insensitive hostname/title search, All/Known/Discovered Kind
+filter, Summary filter, four column sorts and reset. Sorts toggle direction with
+aria-sort; numeric Homepage HTTP places missing observations last in both
+directions, with hostname and stable ID as deterministic tie-breakers. Reset clears
+filters while retaining sorting. Filtering affects directory rows only; details
+remain visible so every native deep link stays accessible. Enhancement failure
+reveals all rows and disables controls. No History API navigation, random entry,
+clipboard feature or elaborate keyboard navigation is added.
+
+Every public string is HTML-encoded again, including attributes, titles and link
+labels. Even an internal caller bypassing the reader cannot turn unsafe hostname
+text into an active external URL. External I2P links are explicit user actions,
+HTTP roots only, `_blank` with `noopener noreferrer`; original paths/queries are
+never reconstructed. The separate embedded template has a restrictive CSP, data
+favicon, no remote assets/fetches and no public JSON in executable JavaScript.
+Public title markup stays literal text and Unicode is preserved.
+
+The complete generated document is bounded to 64 Mi UTF-16 characters, including
+template, encoded attributes and all details. Rendering completes before creating
+a unique private `.i2p-crawl-view-*.tmp` beside output. UTF-8 writing, async flush,
+disk flush and close precede cancellation check and replacement. Failure before
+replacement preserves previous HTML and cleans the owned stage. The same existing
+hard-link, concurrent-writer and crash limitations apply. This produces one local
+report, with no deployment/hosting automation.
+
+Additional validation:
+
+```text
+dotnet test I2PAtlas.Tests/I2PAtlas.Tests.csproj --filter "FullyQualifiedName~I2pCrawlView"
+node --test I2PAtlas.Tests/I2pCrawlViewerTests.cjs
+```

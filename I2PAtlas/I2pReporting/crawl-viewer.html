@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<link rel="icon" href="data:,">
+<title>I2PAtlas crawl inspection</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0 auto; padding: 1.5rem; max-width: 90rem; background: #f4f6fa; color: #182337; font: 1rem/1.5 system-ui, sans-serif; }
+a { color: #164aad; overflow-wrap: anywhere; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #b36300; outline-offset: 3px; }
+h1, h2, h3, h4 { line-height: 1.25; }
+header, section { margin-bottom: 1.5rem; }
+.notice, .crawl-detail, .controls, .stat { background: white; border: 1px solid #cbd3df; border-radius: .4rem; padding: 1rem; }
+.notice { border-left: .3rem solid #a26200; }
+.stats { display: flex; gap: .75rem; flex-wrap: wrap; }
+.stat strong { font-size: 1.4rem; display: block; }
+.controls { display: flex; align-items: end; gap: 1rem; flex-wrap: wrap; }
+label { display: block; }
+input, select, button { font: inherit; padding: .4rem; }
+label input, label select { display: block; max-width: 100%; }
+.table-scroll { overflow-x: auto; background: white; border: 1px solid #cbd3df; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: .65rem; text-align: left; vertical-align: top; border-bottom: 1px solid #d9dfE8; overflow-wrap: anywhere; }
+thead { background: #e6ecf5; }
+thead button { background: transparent; color: inherit; border: 1px solid #9eaec6; cursor: pointer; }
+th[aria-sort="ascending"] button::after { content: ' ↑'; }
+th[aria-sort="descending"] button::after { content: ' ↓'; }
+.badge { display: inline-block; padding: .1rem .4rem; border: 1px solid #8c9db5; border-radius: .3rem; white-space: nowrap; }
+.crawl-detail { margin: 1rem 0; scroll-margin-top: 1rem; }
+.crawl-detail:target { outline: 3px solid #b36300; }
+dl { display: grid; grid-template-columns: minmax(10rem, 19rem) minmax(0, 1fr); gap: .4rem 1rem; }
+dt { font-weight: 600; }
+dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+[hidden] { display: none !important; }
+@media (max-width: 600px) { body { padding: .75rem; } dl { display: block; } dd { margin-bottom: .7rem; } }
+</style>
+</head>
+<body>
+<header>
+<h1>I2PAtlas crawl inspection</h1>
+<p class="notice">These are observations through an unauthenticated proxy, not origin verification, ownership or liveness claims. Friendly discovered hosts depend on router/addressbook resolution. External I2P links open only when you choose them, using your own I2P browser setup.</p>
+{{times}}
+<div class="stats">{{stats}}</div>
+</header>
+<main>
+<section id="directory" aria-labelledby="directory-title">
+<h2 id="directory-title">Public crawl directory</h2>
+{{empty}}
+<noscript><p>All entries and details are available below. Native detail links work without JavaScript.</p></noscript>
+<div id="crawl-controls" class="controls" hidden>
+<label>Hostname or title <input id="crawl-search" type="search" autocomplete="off"></label>
+<label>Kind <select id="crawl-kind"><option value="">All</option><option value="KnownSeed">Known seed</option><option value="DiscoveredHost">Discovered host</option></select></label>
+<label>Summary state <select id="crawl-summary"><option value="">All</option>{{states}}</select></label>
+<button id="crawl-reset" type="button">Reset filters</button>
+</div>
+<p id="crawl-counter" aria-live="polite">All public entries are listed.</p>
+<p>Filters affect the directory only; all detail sections remain below and native detail links always work. Select a column heading to sort.</p>
+<p id="crawl-no-matches" hidden>No matching entries. Reset filters to show all entries.</p>
+<div class="table-scroll">
+<table>
+<caption>Known destination-bound seeds and host-only discovered observations</caption>
+<thead><tr>
+<th id="column-kind" scope="col" data-sort="kind" data-label="Kind"><button type="button" disabled>Kind</button></th>
+<th id="column-hostname" scope="col" data-sort="hostname" data-label="Hostname"><button type="button" disabled>Hostname</button></th>
+<th id="column-depth" scope="col">Depth</th><th id="column-title" scope="col">Title</th>
+<th id="column-summary" scope="col" data-sort="summary" data-label="Summary state"><button type="button" disabled>Summary state</button></th>
+<th id="column-http" scope="col" data-sort="http" data-label="Homepage HTTP"><button type="button" disabled>Homepage HTTP</button></th>
+<th id="column-referrer" scope="col">Referrer</th>
+</tr></thead>
+<tbody id="crawl-entries">{{rows}}</tbody>
+</table>
+</div>
+</section>
+<section aria-labelledby="details-title"><h2 id="details-title">Complete public observations</h2>{{details}}</section>
+</main>
+<script>
+(() => {
+    'use strict';
+    const byId = id => document.getElementById(id);
+    const body = byId('crawl-entries'), controls = byId('crawl-controls');
+    const search = byId('crawl-search'), kind = byId('crawl-kind'), summary = byId('crawl-summary');
+    const counter = byId('crawl-counter'), empty = byId('crawl-no-matches');
+    const rows = Array.from(body.querySelectorAll('tr[data-entry]'));
+    const headers = Array.from(document.querySelectorAll('th[data-sort]'));
+    let key = 'hostname', direction = 1, failed = false;
+    const ordinal = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+    function compare(a, b) {
+        let order;
+        if (key === 'http') {
+            if ((a.dataset.http === '') !== (b.dataset.http === '')) return a.dataset.http === '' ? 1 : -1;
+            order = Number(a.dataset.http) - Number(b.dataset.http);
+        } else if (key === 'kind') {
+            order = Number(a.dataset.kind === 'DiscoveredHost') - Number(b.dataset.kind === 'DiscoveredHost');
+        } else {
+            order = ordinal(a.dataset[key], b.dataset[key]);
+        }
+        return order * direction || ordinal(a.dataset.hostname, b.dataset.hostname) || ordinal(a.dataset.entry, b.dataset.entry);
+    }
+    function fallback() {
+        failed = true;
+        rows.forEach(row => { row.hidden = false; });
+        headers.forEach(header => { header.removeAttribute('aria-sort'); header.querySelector('button').disabled = true; });
+        controls.hidden = true;
+        empty.hidden = true;
+        counter.textContent = 'Enhancement unavailable; all ' + rows.length + ' public entries remain visible.';
+    }
+    function refresh() {
+        if (failed) return;
+        try {
+            const query = search.value.trim().toLowerCase();
+            let count = 0;
+            rows.forEach(row => {
+                row.hidden = !(row.dataset.search.toLowerCase().includes(query) && (!kind.value || row.dataset.kind === kind.value)
+                    && (!summary.value || row.dataset.summary === summary.value));
+                if (!row.hidden) count++;
+            });
+            [...rows].sort(compare).forEach(row => body.appendChild(row));
+            headers.forEach(header => header.setAttribute('aria-sort', header.dataset.sort === key ? (direction === 1 ? 'ascending' : 'descending') : 'none'));
+            counter.textContent = count + ' matching / ' + rows.length + ' public entries';
+            empty.hidden = count !== 0;
+        } catch (_) { fallback(); }
+    }
+    try {
+        search.value = ''; kind.value = ''; summary.value = '';
+        search.addEventListener('input', refresh);
+        kind.addEventListener('change', refresh);
+        summary.addEventListener('change', refresh);
+        byId('crawl-reset').addEventListener('click', () => { search.value = ''; kind.value = ''; summary.value = ''; refresh(); });
+        headers.forEach(header => {
+            const button = header.querySelector('button');
+            button.disabled = false;
+            button.addEventListener('click', () => {
+                if (key === header.dataset.sort) direction *= -1;
+                else { key = header.dataset.sort; direction = 1; }
+                refresh();
+            });
+        });
+        refresh();
+        controls.hidden = failed;
+    } catch (_) { fallback(); }
+})();
+</script>
+</body>
+</html>

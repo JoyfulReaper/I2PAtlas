@@ -171,9 +171,11 @@ dotnet run --project I2PAtlas -- i2p-crawl-project private/results/i2p-crawl.jso
 `I2pCrawlProjectionService` uses only the existing strict `I2pRawCrawlReader` for
 input. It does not reopen the snapshot/addressbook, construct a transport, resolve
 DNS or make requests. The existing raw-crawl/raw-scan/public-scan schemas and
-scan/viewer pipeline are unchanged. Crawl viewer/HTML support is left for
-Crawler 2b: `i2p-view` accepts only public-scan v1, and `i2p-project` accepts only
-raw-scan v1. Neither command accepts either crawl schema.
+scan/viewer pipeline are unchanged. The separate `i2p-crawl-view` command now
+generates standalone inspection HTML from validated public-crawl v1. `i2p-view`
+accepts only public-scan v1, and `i2p-project` accepts only raw-scan v1. Neither
+existing command accepts either crawl schema. See [reporting](../I2pReporting/README.md#standalone-crawl-inspection)
+for the completed local pipeline; no hosting/deployment is introduced.
 
 The new immutable `I2pPublicCrawl` has exactly these top-level fields:
 
@@ -246,7 +248,7 @@ hashes/byte lengths/import time, proxy identity, settings, private errors,
 individual request timestamps/durations, raw metrics, full discovered URLs,
 redirect locations, clearnet links, headers and raw objects. Only the crawl-level
 UTC interval is exposed; no request timings are copied. Plain titles may contain
-literal markup, which any future HTML renderer must escape again.
+literal markup, which the crawl viewer HTML-encodes again at render time.
 
 `I2pPublicCrawlReader` enforces strict UTF-8 without BOM, JSON depth <=8 and a
 128 MiB byte limit before and during reading. Every object requires its exact

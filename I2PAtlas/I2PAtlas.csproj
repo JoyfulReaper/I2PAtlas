@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="I2pReporting/viewer.html" LogicalName="I2PAtlas.I2pReporting.viewer.html" />
+    <EmbeddedResource Include="I2pReporting/crawl-viewer.html" LogicalName="I2PAtlas.I2pReporting.crawl-viewer.html" />
   </ItemGroup>
 
 </Project>

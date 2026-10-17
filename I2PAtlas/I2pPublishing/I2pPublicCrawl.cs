@@ -47,13 +47,18 @@ public abstract class I2pPublicCrawlEntry
     public sealed class DiscoveredHost : I2pPublicCrawlEntry
     {
         public override I2pPublicCrawlEntryKind Kind => I2pPublicCrawlEntryKind.DiscoveredHost;
-        public override int Depth => 1;
+        public override int Depth { get; }
         public I2pPublicCrawlHostForm HostForm { get; }
         public string ReferrerHostname { get; }
-        public string ReferrerDestinationHostname { get; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? ReferrerDestinationHostname { get; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public I2pPublicCrawlHostForm? ReferrerHostForm { get; }
         internal DiscoveredHost(string hostname, I2pPublicCrawlHostForm hostForm, string referrerHostname,
-            string referrerDestinationHostname, I2pPublicCrawlObservation observation) : base(hostname, observation)
-        { HostForm = hostForm; ReferrerHostname = referrerHostname; ReferrerDestinationHostname = referrerDestinationHostname; }
+            string? referrerDestinationHostname, I2pPublicCrawlObservation observation, int depth = 1,
+            I2pPublicCrawlHostForm? referrerHostForm = null) : base(hostname, observation)
+        { HostForm = hostForm; ReferrerHostname = referrerHostname; ReferrerDestinationHostname = referrerDestinationHostname;
+            Depth = depth; ReferrerHostForm = referrerHostForm; }
     }
 }
 
@@ -61,20 +66,21 @@ public abstract class I2pPublicCrawlEntry
 public sealed class I2pPublicCrawl
 {
     public const string CurrentSchema = "i2patlas.public-crawl";
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     public string Schema => CurrentSchema;
-    public int Version => CurrentVersion;
+    public int Version { get; }
     public DateTimeOffset CrawlStartedAtUtc { get; }
     public DateTimeOffset CrawlCompletedAtUtc { get; }
     public int KnownSeedCount { get; }
     public int DiscoveredHostCount => Entries.Length - KnownSeedCount;
     public ImmutableArray<I2pPublicCrawlEntry> Entries { get; }
 
-    internal I2pPublicCrawl(DateTimeOffset started, DateTimeOffset completed, ImmutableArray<I2pPublicCrawlEntry> entries)
+    internal I2pPublicCrawl(DateTimeOffset started, DateTimeOffset completed, ImmutableArray<I2pPublicCrawlEntry> entries, int version = 1)
     {
         CrawlStartedAtUtc = started;
         CrawlCompletedAtUtc = completed;
         Entries = entries;
+        Version = version;
         KnownSeedCount = entries.Count(e => e is I2pPublicCrawlEntry.KnownSeed);
     }
 }

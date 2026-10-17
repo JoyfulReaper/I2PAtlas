@@ -1,6 +1,6 @@
 # I2PAtlas architecture
 
-I2PAtlas has eight explicit CLI commands: separate scan and one-hop crawl
+I2PAtlas has eight explicit CLI commands: separate scan and bounded crawl
 pipelines through public projection to standalone HTML. There is no hosted service or deployment layer.
 
 ```text
@@ -31,8 +31,8 @@ i2p-probe-test: strict seed loading -> one uniquely selected friendly name
 
 i2p-crawl: strict seed loading -> selected known-seed probe wave
             -> pure bounded frontier selection using full snapshot suppression
-            -> terminal host-only probe wave -> private i2patlas.raw-crawl v1
-            -> i2p-crawl-project -> public i2patlas.public-crawl v1
+            -> bounded breadth-first host-only waves -> private i2patlas.raw-crawl v2
+            -> i2p-crawl-project -> public i2patlas.public-crawl v2
             -> i2p-crawl-view -> standalone crawl inspection HTML
 ```
 
@@ -223,7 +223,7 @@ Selected resource limits:
 These are implementation limits, not configurable promises beyond the documented
 CLI options. Component READMEs describe additional per-field bounds.
 
-## Private one-hop crawl
+## Private bounded breadth-first crawl
 
 [I2pCrawling/](../I2PAtlas/I2pCrawling/README.md) owns the separate `i2p-crawl`
 command's service, settings, private raw model, staged writer and strict reader.
@@ -232,27 +232,31 @@ uses one guarded transport and the shared Crawler 0 probe state machine.
 Known seeds remain destination-bound and independent, including alternate
 destinations for one friendly name.
 
-The fixed worker count is `min(concurrency, wave target count)`. All depth-0 work
-finishes before the unchanged pure Crawler 1a selector runs exactly once, using
-the complete snapshot for known friendly/B32 suppression. Only complete eligible
+The fixed worker count is `min(concurrency, wave target count)`. Each complete
+wave finishes before the pure selector populates the next depth, always using
+the complete snapshot for known friendly/B32 suppression and excluding every
+previously admitted discovered hostname. Only complete eligible
 HTTP-200 HTML/XHTML parents contribute. The lexically smallest K unknown hosts
-retain deterministic smallest known-parent provenance. A second bounded worker
-wave probes those host-only targets; depth 1 is terminal. Its links stay private
+retain deterministic smallest immediate-parent provenance. Further bounded worker
+waves probe those host-only targets up to max-depth; terminal links stay private
 evidence, never another frontier. No target DNS, application retries, direct
 connections or original discovered URL requests are added.
 
 Defaults are 2 workers, 10000 ms per request, 10000 seeds and 100 discovered hosts;
-CLI ranges are 1–4, 1–60000, 1–10000 and 0–1000 respectively. Zero host capacity
-disables depth-1 requests while preserving frontier counts. There is no depth
-option. Expected target failures remain observations; unexpected nonfatal probe
+CLI ranges are 1–4, 1–60000, 1–10000 and 0–1000 respectively. The discovered-host
+budget is GLOBAL, not renewed per wave. `--max-depth` permits 1..3, default 1.
+Zero remaining host capacity prevents further admissions while preserving eligible
+reference counts at nonterminal barriers. Expected target failures remain observations; unexpected nonfatal probe
 exceptions retain sanitized unknown partial state. Infrastructure failure cancels
 siblings; cancellation/resource limits abort installation and preserve old output.
 
-`i2patlas.raw-crawl` v1 separates known results (hostname, preserved destination,
+`i2patlas.raw-crawl` v2 separates known results (hostname, preserved destination,
 derived B32, depth 0, evidence) from discovered results (hostname, HostForm,
-depth 1, structured selected-known-parent hostname+B32 referrer, evidence).
+stored depth 1..maximumDepth, immediate referrer, evidence). At depth 1 the
+referrer is `{ hostname, destinationHostname }`; deeper referrers are exactly
+`{ hostname, hostForm }`, identifying a discovered parent at depth N-1.
 Known order is hostname then preserved destination text; discovered order is
-hostname, all ordinal. Host-only results never acquire a destination or inferred
+depth then hostname, all ordinal. Host-only results never acquire a destination or inferred
 identity. Friendly hosts depend on proxy/router resolution, and all response
 origin evidence remains unauthenticated. Top-level provenance/settings, seed and
 frontier counts, UTC times and metrics are private alongside every result field.
@@ -262,21 +266,34 @@ with existing per-response/page limits unchanged. `I2pRawCrawlReader` rejects
 unknown/duplicate/missing fields, unsupported schema/version, malformed identity,
 host form/depth/order/referrer mismatches, invalid times/settings/gates, inconsistent
 counts/metrics and excess evidence. It validates selected parent membership and
-the wave barrier without reopening source files or claiming origin proof.
+every preceding-wave barrier and eligible parent link evidence without reopening
+source files or claiming origin proof. Required v2 settings include maximumDepth.
+Strict raw/public v1 remains supported with its original depth-1 shape. Projection
+retains the source version, so existing one-hop files need no migration.
 The private writer flushes and closes a bounded staged file, strictly validates
 its bytes, then checks cancellation and replaces the output. No partial final
 artifact is installed. Existing raw-scan/public-scan schemas stay unchanged;
 `i2p-project` and `i2p-view` reject crawl artifacts; the crawl commands remain separate.
 
-`i2p-crawl-project` is a separate purely local path through the unchanged strict
+`i2p-crawl-project` is a separate purely local path through the strict
 `I2pRawCrawlReader`, `I2pPublicCrawlProjector` and staged `I2pCrawlProjectionService`.
-`i2patlas.public-crawl` v1 contains crawl UTC start/completion, known/discovered
+`i2patlas.public-crawl` v2 contains crawl UTC start/completion, known/discovered
 counts and one entries array with closed `KnownSeed` and `DiscoveredHost` shapes.
 Known entries expose hostname+derived B32, depth 0 and public observations.
-Discovered entries expose hostname, public HostForm, depth 1, parent hostname+B32
-and public observations; they never acquire a destination identity. Parent B32
-keeps alternate destinations unambiguous. Known entries sort hostname then B32;
-discovered entries follow in hostname order, all ordinal.
+Discovered entries expose hostname, public HostForm, stored depth and immediate
+parent identity. At depth 1 that is referrerHostname+referrerDestinationHostname;
+deeper entries instead have referrerHostname+referrerHostForm, with no destination.
+Known-parent B32 keeps alternate destinations unambiguous. Known entries sort
+hostname then B32; discovered entries follow in depth-then-hostname order, ordinal.
+The viewer follows immediate-parent fragments at every depth, preserving v1 IDs.
+
+Progress is an immutable aggregate-only service callback. The command writes
+stderr wave starts/barriers and throttled completions (25 targets or a completion
+after 20 seconds), with depth, counts and elapsed time, never identities, URLs,
+proxy identity or response/error text. There is no pending-request heartbeat.
+Nonfatal progress writer/callback failure disables further progress without
+aborting the crawl. Final completion remains stdout. Cancellation and staged
+installation semantics are unchanged.
 
 The allowlist excludes operational provenance, Base64 destinations, proxy/settings,
 raw metrics, errors, individual timings, redirects and full URLs. Only sanitized
@@ -432,4 +449,4 @@ replacement failures, projection privacy and viewer generation. Node tests cover
 the viewer's HTTP-200 default, filtering, sorting, navigation and stable identities.
 No automated test requires a real I2P router.
 
-Crawling beyond depth 1 remains future work. There is no scheduler or deployment package.
+Crawling beyond depth 3 remains unsupported. There is no scheduler or deployment package.

@@ -41,7 +41,7 @@ public sealed class I2pPublicCrawlReaderTests
         switch (mutation)
         {
             case "schema": root["schema"] = "i2patlas.public-scan"; break;
-            case "version": root["version"] = 2; break;
+            case "version": root["version"] = 3; break;
             case "unknown-root": root["snapshot"] = "PRIVATE_PROVENANCE"; break;
             case "missing-root": root.AsObject().Remove("knownSeedCount"); break;
             case "known-count": root["knownSeedCount"] = 1; break;

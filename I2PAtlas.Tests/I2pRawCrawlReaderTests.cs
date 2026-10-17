@@ -66,7 +66,7 @@ public sealed class I2pRawCrawlReaderTests
         {
             case "schema": root["schema"] = "i2patlas.raw-scan"; break;
             case "public-schema": root["schema"] = "i2patlas.public-crawl"; break;
-            case "version": root["version"] = 2; break;
+            case "version": root["version"] = 3; break;
             case "integer-enum": evidence["robotsRequestOutcome"] = 4; break;
             case "enum-case": evidence["robotsRequestOutcome"] = "proxyHttpResponse"; break;
             case "unknown-root": root["private"] = true; break;

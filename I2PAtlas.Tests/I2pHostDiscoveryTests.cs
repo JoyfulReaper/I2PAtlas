@@ -36,7 +36,7 @@ public sealed class I2pHostDiscoveryTests
             typeof(I2pCrawlWorkItem).GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                 .Where(p => p.GetMethod?.IsPrivate != true && p.GetMethod?.IsFamily != true)
                 .Select(p => p.Name).ToArray());
-        CollectionAssert.AreEquivalent(new[] { "Hostname", "DestinationHostname" },
+        CollectionAssert.AreEquivalent(new[] { "Hostname", "DestinationHostname", "HostForm" },
             typeof(I2pCrawlReferrer).GetProperties().Select(p => p.Name).ToArray());
     }
 

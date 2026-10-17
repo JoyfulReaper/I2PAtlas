@@ -277,7 +277,7 @@ public sealed class I2pCrawlTests
         Assert.AreEqual(eligible ? 1L : 0L, result.Discovery.EligibleReferenceCount);
     }
 
-    private sealed class DnsObserver : EventListener
+    internal sealed class DnsObserver : EventListener
     {
         internal ConcurrentQueue<string> Hostnames { get; } = new();
         protected override void OnEventSourceCreated(EventSource source)

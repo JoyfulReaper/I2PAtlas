@@ -247,7 +247,7 @@ public sealed class I2pCrawlViewerTests
         switch (failure)
         {
             case "schema": root["schema"] = "i2patlas.raw-crawl"; break;
-            case "version": root["version"] = 2; break;
+            case "version": root["version"] = 3; break;
             case "unknown-private": root["sourcePath"] = "PRIVATE_INPUT_PATH"; break;
             case "hostname": root["entries"]![0]!["hostname"] = "\"><img src=x>.i2p"; break;
             case "depth": root["entries"]![2]!["depth"] = 0; break;

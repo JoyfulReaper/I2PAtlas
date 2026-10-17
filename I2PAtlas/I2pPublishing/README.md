@@ -156,7 +156,24 @@ example hard links) and simultaneous writers are outside these path checks;
 replacement itself does not truncate the old file. A crash can leave a staging
 file; replacement is not a multi-file or power-loss durability guarantee.
 
-## Public crawl v1
+## Public crawl v1/v2
+
+New crawl output uses raw/public version **2**. Projection retains the input
+version, so existing raw v1 files still produce public v1. Both strict readers
+continue accepting their original v1 shapes without repair or migration.
+
+Public v2 retains the top-level v1 fields and KnownSeed shape below. Discovered
+entries store depth 1..3 and sort by depth then ordinal hostname, globally unique.
+At depth 1, `referrerHostname` + `referrerDestinationHostname` identify a KnownSeed.
+At depth 2/3, the exact shape instead has `referrerHostname` + `referrerHostForm`
+(`Friendly` or `ClassicBase32`) identifying a DiscoveredHost at depth N-1. The
+destination field is absent, not inferred. Each parent must record a complete
+HTTP-200 HTML/XHTML homepage observation with the child in its public hostname evidence.
+The reader rejects absent/same-wave/skipped-depth/cyclic or mismatched-form
+parents. Public v2 permits at most depth 3; the private reader also enforces the
+configured maximum and whole-wave timestamp barriers.
+
+The following v1 contract is preserved. There is no v2-to-v1 downgrade command.
 
 The separate local crawl boundary is:
 
@@ -170,9 +187,9 @@ dotnet run --project I2PAtlas -- i2p-crawl-project private/results/i2p-crawl.jso
 
 `I2pCrawlProjectionService` uses only the existing strict `I2pRawCrawlReader` for
 input. It does not reopen the snapshot/addressbook, construct a transport, resolve
-DNS or make requests. The existing raw-crawl/raw-scan/public-scan schemas and
+DNS or make requests. The existing raw-scan/public-scan schemas and
 scan/viewer pipeline are unchanged. The separate `i2p-crawl-view` command now
-generates standalone inspection HTML from validated public-crawl v1. `i2p-view`
+generates standalone inspection HTML from validated public-crawl v1/v2. `i2p-view`
 accepts only public-scan v1, and `i2p-project` accepts only raw-scan v1. Neither
 existing command accepts either crawl schema. See [reporting](../I2pReporting/README.md#standalone-crawl-inspection)
 for the completed local pipeline; no hosting/deployment is introduced.

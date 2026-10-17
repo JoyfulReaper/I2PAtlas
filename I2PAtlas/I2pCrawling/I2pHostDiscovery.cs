@@ -7,7 +7,7 @@ using I2PAtlas.Seeds;
 
 namespace I2PAtlas.I2pCrawling;
 
-/// <summary>Pure depth-1 selection from completed seed observations; performs no requests or I/O.</summary>
+/// <summary>Pure bounded frontier selection from one completed wave; performs no requests or I/O.</summary>
 internal static class I2pHostDiscovery
 {
     internal static I2pCrawlFrontier Select(I2pSeedSnapshot fullSnapshot,
@@ -15,7 +15,28 @@ internal static class I2pHostDiscovery
         I2pCrawlDiscoverySettings? settings = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (selectedParents.IsDefault || selectedParents.Length > AddressBookParser.MaxSeeds)
+            throw new ArgumentException("Selected parent observations must be initialized and bounded.", nameof(selectedParents));
+        foreach (var parent in selectedParents)
+        {
+            ArgumentNullException.ThrowIfNull(parent);
+            ArgumentNullException.ThrowIfNull(parent.Target);
+        }
+        return SelectWave(fullSnapshot, selectedParents.Select(p => new I2pCrawlParentObservation(
+            new(p.Target.Seed.Hostname, p.Target.DestinationHostname), p.Observation)).ToImmutableArray(),
+            new HashSet<string>(StringComparer.Ordinal), 1, settings, cancellationToken);
+    }
+
+    internal static I2pCrawlFrontier SelectWave(I2pSeedSnapshot fullSnapshot,
+        ImmutableArray<I2pCrawlParentObservation> selectedParents, IReadOnlySet<string> previouslyAdmitted, int depth,
+        I2pCrawlDiscoverySettings? settings = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (depth is < 1 or > 3) throw new ArgumentOutOfRangeException(nameof(depth));
         ArgumentNullException.ThrowIfNull(fullSnapshot);
+        ArgumentNullException.ThrowIfNull(previouslyAdmitted);
+        if (previouslyAdmitted.Count > I2pCrawlDiscoverySettings.HardMaximumDiscoveredHosts)
+            throw new ArgumentException("Earlier admissions exceed the global host bound.", nameof(previouslyAdmitted));
         if (fullSnapshot.Seeds.IsDefault || fullSnapshot.Seeds.Length > AddressBookParser.MaxSeeds)
             throw new ArgumentException("A complete validated seed snapshot is required.", nameof(fullSnapshot));
         if (selectedParents.IsDefault || selectedParents.Length > AddressBookParser.MaxSeeds)
@@ -30,7 +51,7 @@ internal static class I2pHostDiscovery
             var identity = I2pCrawlReferrer.FromSeed(seed);
             knownIdentities.Add(identity);
             knownNames.Add(identity.Hostname);
-            knownNames.Add(identity.DestinationHostname);
+            knownNames.Add(identity.DestinationHostname!);
         }
 
         var seenParents = new HashSet<I2pCrawlReferrer>();
@@ -42,11 +63,12 @@ internal static class I2pHostDiscovery
         {
             cancellationToken.ThrowIfCancellationRequested();
             ArgumentNullException.ThrowIfNull(parent);
-            ArgumentNullException.ThrowIfNull(parent.Target);
             ArgumentNullException.ThrowIfNull(parent.Observation);
-            var referrer = new I2pCrawlReferrer(parent.Target.Seed.Hostname, parent.Target.DestinationHostname);
-            if (!knownIdentities.Contains(referrer) || !seenParents.Add(referrer))
-                throw new ArgumentException("Selected parents must be distinct semantic seeds from the full snapshot.", nameof(selectedParents));
+            var referrer = parent.Referrer;
+            if (!seenParents.Add(referrer) ||
+                (depth == 1 ? !knownIdentities.Contains(referrer) :
+                    referrer.DestinationHostname != null || referrer.HostForm == null || !previouslyAdmitted.Contains(referrer.Hostname)))
+                throw new ArgumentException("Parents must identify distinct completed targets from the preceding wave.", nameof(selectedParents));
             var metadata = parent.Observation.HomepageMetadata;
             if (metadata != null && (metadata.Links.IsDefault || metadata.Links.Length > I2pPageMetadata.MaxLinks))
                 throw new ArgumentException("Parent link observations must be initialized and bounded.", nameof(selectedParents));
@@ -56,7 +78,7 @@ internal static class I2pHostDiscovery
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var target = Candidate(link);
-                if (target == null || knownNames.Contains(target.Hostname)) continue;
+                if (target == null || knownNames.Contains(target.Hostname) || previouslyAdmitted.Contains(target.Hostname)) continue;
                 references++;
                 if (retained.TryGetValue(target.Hostname, out var existing))
                 {
@@ -74,14 +96,14 @@ internal static class I2pHostDiscovery
                     retained.Remove(largest);
                 }
                 names.Add(target.Hostname);
-                retained.Add(target.Hostname, new(target, referrer));
+                retained.Add(target.Hostname, new(target, referrer, depth));
             }
         }
         cancellationToken.ThrowIfCancellationRequested();
         return new(names.Select(name => retained[name]).ToImmutableArray(), references, limited);
     }
 
-    private static bool Eligible(I2pProbeObservation observation) =>
+    internal static bool Eligible(I2pProbeObservation observation) =>
         observation.HomepageRequestAttempted && observation.HomepageRequestOutcome == I2pRequestOutcome.ProxyHttpResponse &&
         observation.HomepageResponse is { StatusCode: 200 } response &&
         observation.HomepageMetadata is { BodyTruncated: false, ExtractionIncomplete: false } metadata &&
@@ -96,7 +118,7 @@ internal static class I2pHostDiscovery
             ? "application/xhtml+xml" : null;
     }
 
-    private static I2pProbeTarget.DiscoveredHost? Candidate(I2pDiscoveredLink? link)
+    internal static I2pProbeTarget.DiscoveredHost? Candidate(I2pDiscoveredLink? link)
     {
         if (link is not { Kind: I2pDiscoveredLinkKind.I2p } || string.IsNullOrEmpty(link.Url)) return null;
         var url = link.Url;

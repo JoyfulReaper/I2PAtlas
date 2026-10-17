@@ -71,14 +71,16 @@ dotnet run --project I2PAtlas -- i2p-project private/results/i2p-scan.json publi
 dotnet run --project I2PAtlas -- i2p-view published/i2p-latest.json published/i2p-index.html
 ```
 
-The separate private one-hop crawl command uses the same proxy and probe policy:
+The separate private bounded crawl command uses the same proxy and probe policy:
 
 ```text
 dotnet run --project I2PAtlas -- i2p-crawl private/i2p-seeds.json private/results/i2p-crawl.json http://127.0.0.1:4444 --max-discovered-hosts 100
 ```
 
-Depth is fixed at 1. After selected seeds finish, a bounded deterministic frontier
-of unknown I2P hosts is probed once; depth-1 links remain evidence only. Discovered
+Depth defaults to 1; `--max-depth 2` or `--max-depth 3` explicitly enables deeper
+breadth-first waves. Each wave completes before the next is selected. The
+discovered-host cap is global across all depths; each admitted hostname is probed
+once. Links at maximum depth remain evidence only. Discovered
 host observations are unauthenticated and depend on the proxy/router addressbook.
 Output is **private raw-crawl data**. Project its public allowlist locally with:
 
@@ -87,8 +89,10 @@ dotnet run --project I2PAtlas -- i2p-crawl-project private/results/i2p-crawl.jso
 dotnet run --project I2PAtlas -- i2p-crawl-view published/i2p-crawl.json published/i2p-crawl.html
 ```
 
-Projection writes `i2patlas.public-crawl` v1, preserving distinct known-seed and
-host-only discovered entries. The separate crawl viewer generates a standalone
+New crawls write `i2patlas.raw-crawl` v2; projection writes public-crawl v2,
+preserving stored depths and immediate known-seed or host-only referrers.
+Existing v1 raw/public artifacts remain readable/projectable/viewable without
+migration, and v1 projection retains version 1. The separate crawl viewer generates a standalone
 inspection report from that validated public artifact. Existing `i2p-project`
 and `i2p-view` remain scan-only and reject crawl artifacts.
 
@@ -103,7 +107,7 @@ The executable's help branding is `i2patlas`. It has exactly eight commands:
 | `import-seeds` | addressbook file, private snapshot file | None |
 | `i2p-probe-test` | snapshot file, existing friendly hostname, proxy URI | `--timeout-ms`: 1–60000 |
 | `i2p-scan` | snapshot file, private output file, proxy URI | `--concurrency`: 1–4; `--timeout-ms`: 1–60000; `--max-seeds`: 1–10000 |
-| `i2p-crawl` | snapshot file, private output file, proxy URI | Scan option ranges plus `--max-discovered-hosts`: 0–1000; fixed depth 1 |
+| `i2p-crawl` | snapshot file, private output file, proxy URI | Scan option ranges plus global `--max-discovered-hosts`: 0–1000; `--max-depth`: 1–3 (default 1) |
 | `i2p-project` | private raw file, public output file | None |
 | `i2p-crawl-project` | private raw-crawl file, public-crawl output file | None |
 | `i2p-view` | public input file, HTML output file | None |
@@ -112,8 +116,12 @@ The executable's help branding is `i2patlas`. It has exactly eight commands:
 Scan defaults are concurrency **2**, **10000 ms per request**, and at most
 **10000 seeds**. `--max-seeds` takes a prefix in normalized hostname then
 preserved destination-text order after validating the entire snapshot.
-The crawl uses these same defaults plus **100 discovered hosts**; zero disables
-depth-1 requests. The diagnostic also defaults to 10000 ms per request.
+The crawl uses these same defaults plus **100 discovered hosts globally** and
+**maximum depth 1**; zero hosts disables discovered requests. Aggregate progress
+goes to stderr at wave starts/barriers and every 25 completions or a completion
+after 20 seconds without a line. It contains no identities/proxy/response text.
+A failing progress writer is disabled without failing the crawl; the final
+completion summary remains stdout. The diagnostic also defaults to 10000 ms per request.
 
 No arguments, `help`, `--help` or `-h` show usage and exit 0 without networking or
 file mutation. Unknown commands exit 2. Command-specific error/exit details are in
@@ -194,9 +202,9 @@ address-helper links are omitted from extraction.
 | --- | --- |
 | `i2patlas.seed-snapshot` v1 | **Private** validated seeds, import timestamp, source path and exact source-byte SHA-256/length |
 | `i2patlas.raw-scan` v1 | **Private** per-seed robots/homepage evidence, destinations, timings, proxy/settings and input provenance |
-| `i2patlas.raw-crawl` v1 | **Private** separate known-seed and terminal host-only evidence, structured parent identities, frontier counts and operational provenance |
+| `i2patlas.raw-crawl` v1/v2 | **Private** separate known-seed and bounded host-only evidence, depths/immediate parent identities, frontier counts and operational provenance; new crawls emit v2 |
 | `i2patlas.public-scan` v1 | Explicitly allowlisted friendly/B32 names, scan-level times, observations, bounded titles and discovered I2P hostnames |
-| `i2patlas.public-crawl` v1 | Separate known-seed and host-only entries, crawl-level times, observations, sanitized titles/media types, I2P hostname lists and exact parent hostname+B32 references; input to the crawl inspection viewer |
+| `i2patlas.public-crawl` v1/v2 | Separate known-seed and host-only entries, depths/immediate parent identities, crawl-level times, observations, sanitized titles/media types and I2P hostname lists; input to the crawl inspection viewer |
 
 Keep seed/raw files outside every served directory. `/private/` is ignored by
 Git. Raw output rejects path components named `published`, `public`, `wwwroot` or
@@ -207,9 +215,9 @@ destinations, source paths/hashes, proxy details, settings, private errors,
 per-seed timings, redirects and full discovered URLs are omitted. B32 identities
 are intentionally public. Projection does not turn an observation into an
 authenticated-origin claim. `i2p-view` accepts **only public-scan v1**;
-`i2p-crawl-view` accepts **only public-crawl v1**. Neither accepts seed or raw artifacts.
+`i2p-crawl-view` accepts **only public-crawl v1/v2**. Neither accepts seed or raw artifacts.
 
-Crawl projection strictly validates raw-crawl v1 and its staged public-crawl v1
+Crawl projection strictly validates raw-crawl v1/v2 and its staged public-crawl of the same version
 output before replacement. It omits operational provenance, destinations, proxy
 identity, settings, metrics, private errors, per-request times, redirects and full
 URLs. Friendly discovered hosts never gain an inferred destination identity.
@@ -255,7 +263,7 @@ or network fetches. This is a local CLI pipeline, not deployment or hosting auto
 - Proxy responses are unauthenticated; a proxy could imitate plausible robots.
 - Only target HTTP/80 is supported. Conservative robots handling skips some sites
   whose homepages might otherwise be useful to observe.
-- `i2p-scan` stays snapshot-only. The separate private crawler stops at depth 1;
+- `i2p-scan` stays snapshot-only. The separate private crawler defaults to depth 1 and supports at most depth 3;
   there is no deeper recursion or application retry loop.
 - There is no scheduler, deployment package or hosting command.
 - Addressbook quality affects coverage, and friendly-name resolution can differ
@@ -271,7 +279,7 @@ or network fetches. This is a local CLI pipeline, not deployment or hosting auto
 - [Proxy-only transport](I2PAtlas/I2pTransport/README.md)
 - [Robots/homepage policy and diagnostic](I2PAtlas/I2pProbing/README.md)
 - [Bounded scanning and private raw artifacts](I2PAtlas/I2pScanning/README.md)
-- [Private one-hop crawling and strict raw-crawl validation](I2PAtlas/I2pCrawling/README.md)
+- [Private bounded crawling and strict raw-crawl validation](I2PAtlas/I2pCrawling/README.md)
 - [Strict raw validation and public projection](I2PAtlas/I2pPublishing/README.md)
 - [Public reader and standalone viewer](I2PAtlas/I2pReporting/README.md)
 

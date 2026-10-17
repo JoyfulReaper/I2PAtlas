@@ -27,9 +27,10 @@ internal static class I2pPublicCrawlProjector
                 _ => throw new InvalidDataException("Invalid discovered host form.")
             };
             entries.Add(new I2pPublicCrawlEntry.DiscoveredHost(host.Hostname, form, host.Referrer.Hostname,
-                host.Referrer.DestinationHostname, Observation(host.Evidence)));
+                host.Referrer.DestinationHostname, Observation(host.Evidence), host.Depth,
+                host.Referrer.HostForm is { } parentForm ? (I2pPublicCrawlHostForm)parentForm : null));
         }
-        return new(raw.CrawlStartedAtUtc, raw.CrawlCompletedAtUtc, entries.MoveToImmutable());
+        return new(raw.CrawlStartedAtUtc, raw.CrawlCompletedAtUtc, entries.MoveToImmutable(), raw.Version);
     }
 
     private static I2pPublicCrawlObservation Observation(I2pCrawlEvidence e) => new(

@@ -95,7 +95,7 @@ The Node tests use DOM fixtures for behavior; use a browser for layout checks.
 
 The crawl viewer is a separate generator and template. Existing `i2p-view`
 continues accepting only public-scan v1 with its unchanged behavior and HTTP-200
-default. The new command accepts only validated public-crawl v1:
+default. The crawl command accepts only validated public-crawl v1/v2:
 
 ```text
 dotnet run --project I2PAtlas -- i2p-crawl-view <public-crawl-file> <html-output-file>
@@ -106,9 +106,9 @@ The completed local CLI pipeline is:
 ```text
 private seed snapshot
     -> i2p-crawl
-    -> private i2patlas.raw-crawl v1
+    -> private i2patlas.raw-crawl v2 (existing v1 remains supported)
     -> i2p-crawl-project
-    -> public i2patlas.public-crawl v1
+    -> public i2patlas.public-crawl of the same version
     -> i2p-crawl-view
     -> standalone crawl HTML report
 ```
@@ -126,9 +126,10 @@ The report shows crawl start/completion UTC, known/discovered/total counts,
 homepage-response and title counts, and a complete directory with Kind, Hostname,
 Depth, Title, Summary state, Homepage HTTP and Referrer columns. Known seeds are
 depth 0, with friendly and destination-derived B32 links/details and no referrer.
-Discovered entries are depth 1, with HostForm, their actual hostname and exact
-parent hostname+B32. The parent's B32 distinguishes alternate known destinations;
-it is never presented as a destination identity of the child.
+Discovered entries store depth 1..3, HostForm, their actual hostname and exact
+immediate parent. Depth-1 parent hostname+B32 distinguishes alternate known
+destinations. Deeper parents use their observed hostname+HostForm without an
+invented destination. Referrer links follow the public parent chain at every depth.
 
 Each detail contains all public observation fields: summary, robots outcome/
 classification/observation/status, homepage attempt/outcome/classification/status,
@@ -142,11 +143,13 @@ Stable detail IDs are `i2p-crawl-entry-` plus lowercase SHA-256 of UTF-8:
 ```text
 KnownSeed\n<hostname>\n<destinationHostname>
 DiscoveredHost\n<hostname>\n<referrerHostname>\n<referrerDestinationHostname>
+DiscoveredHost\n<hostname>\n<referrerHostname>\nHostOnly:<referrerHostForm>
 ```
 
 Array position, crawl times, title, status and other observations do not affect
-IDs. Each detail links back to the directory; discovered entries link to their
-exact known parent's detail. All rows/details remain in the standalone HTML.
+IDs. The first two forms preserve existing v1 IDs; the third is used only for
+host-only parents in v2. Each detail links back to the directory; discovered
+entries link to their immediate parent's detail. All rows/details remain in the standalone HTML.
 Details are hidden by default; selecting a hostname reveals only its fragment's
 CSS `:target` article, without JavaScript. Back to directory targets `#directory`
 and hides the selected detail. The detail container has no empty visible heading.

@@ -10,7 +10,7 @@ using I2PAtlas.Seeds;
 
 namespace I2PAtlas.I2pCrawling;
 
-/// <summary>Local, fail-closed validation of private version-1 evidence. Never repairs or sorts input.</summary>
+/// <summary>Local, fail-closed validation of private v1/v2 evidence. Never repairs or sorts input.</summary>
 internal static class I2pRawCrawlReader
 {
     public const int MaxArtifactBytes = 128 * 1024 * 1024;
@@ -48,7 +48,8 @@ internal static class I2pRawCrawlReader
     {
         Fields(root, "schema", "version", "crawlStartedAtUtc", "crawlCompletedAtUtc", "snapshot", "proxy", "settings",
             "snapshotSeedCount", "selectedSeedCount", "seedLimitApplied", "discovery", "knownSeedResults", "discoveredHostResults", "metrics");
-        Require(Text(root, "schema", 64) == I2pRawCrawlArtifact.CurrentSchema && Integer(root, "version", 1, 1) == 1,
+        var version = Integer(root, "version", 1, 2);
+        Require(Text(root, "schema", 64) == I2pRawCrawlArtifact.CurrentSchema,
             "Unsupported raw crawl schema/version.");
         var started = Timestamp(root, "crawlStartedAtUtc");
         var completed = Timestamp(root, "crawlCompletedAtUtc");
@@ -67,9 +68,11 @@ internal static class I2pRawCrawlReader
             "Invalid proxy identity.");
         var proxyIdentity = new I2pCrawlProxy(address, Integer(proxy, "port", 1, 65535));
         var config = root.GetProperty("settings");
-        Fields(config, "concurrency", "requestTimeoutMilliseconds", "maximumSeeds", "maximumDiscoveredHosts");
+        Fields(config, version == 1 ? ["concurrency", "requestTimeoutMilliseconds", "maximumSeeds", "maximumDiscoveredHosts"] :
+            ["concurrency", "requestTimeoutMilliseconds", "maximumSeeds", "maximumDiscoveredHosts", "maximumDepth"]);
         var settings = new I2pCrawlSettings(Integer(config, "concurrency", 1, 4), Integer(config, "requestTimeoutMilliseconds", 1, 60000),
-            Integer(config, "maximumSeeds", 1, 10000), Integer(config, "maximumDiscoveredHosts", 0, 1000));
+            Integer(config, "maximumSeeds", 1, 10000), Integer(config, "maximumDiscoveredHosts", 0, 1000),
+            version == 1 ? null : Integer(config, "maximumDepth", 1, 3));
         var snapshotCount = Integer(root, "snapshotSeedCount", 0, 10000);
         var knownArray = Array(root, "knownSeedResults", 10000);
         var count = Integer(root, "selectedSeedCount", 0, 10000);
@@ -102,7 +105,7 @@ internal static class I2pRawCrawlReader
         Fields(discoveryValue, "eligibleReferenceCount", "admittedHostCount", "admissionLimitApplied");
         var hostArray = Array(root, "discoveredHostResults", settings.MaximumDiscoveredHosts);
         var admitted = Integer(discoveryValue, "admittedHostCount", 0, settings.MaximumDiscoveredHosts);
-        var references = Long(discoveryValue, "eligibleReferenceCount", (long)count * I2pPageMetadata.MaxLinks);
+        var references = Long(discoveryValue, "eligibleReferenceCount", (long)(count + (version == 1 ? 0 : admitted)) * I2pPageMetadata.MaxLinks);
         var limited = Boolean(discoveryValue, "admissionLimitApplied");
         Require(admitted == hostArray.GetArrayLength() && references >= admitted &&
             (!limited || admitted == settings.MaximumDiscoveredHosts && references > admitted) &&
@@ -110,30 +113,59 @@ internal static class I2pRawCrawlReader
             (references != 0 || !limited), "Inconsistent discovery bounds/counts.");
         var hosts = ImmutableArray.CreateBuilder<I2pCrawlHostResult>(admitted);
         string? previousHost = null;
+        var previousDepth = 1;
+        var byHostname = new Dictionary<string, I2pCrawlHostResult>(StringComparer.Ordinal);
         var knownCompleted = known.Count == 0 ? started : known.Max(r => r.Evidence.CompletedAtUtc);
+        var waveCompleted = new Dictionary<int, DateTimeOffset> { [0] = knownCompleted };
         foreach (var item in hostArray.EnumerateArray())
         {
             token.ThrowIfCancellationRequested();
             Fields(item, "hostname", "hostForm", "depth", "referrer", "evidence");
             var hostname = Text(item, "hostname", 253);
+            var depth = Integer(item, "depth", 1, settings.MaximumDepth);
             var target = new I2pProbeTarget.DiscoveredHost(hostname);
             Require(target.Hostname == hostname && target.HostForm == EnumValue<I2pDiscoveredHostForm>(item, "hostForm") &&
                 !knownNames.Contains(hostname), "Invalid discovered host identity/form.");
-            Require(previousHost == null || string.CompareOrdinal(previousHost, hostname) < 0, "Discovered hosts must be strictly ordered without duplicates.");
+            Require(!byHostname.ContainsKey(hostname) && (previousHost == null ? depth == 1 :
+                depth == previousDepth && string.CompareOrdinal(previousHost, hostname) < 0 || depth == previousDepth + 1),
+                "Discovered hosts must be unique and ordered by contiguous depth then hostname.");
             previousHost = hostname;
+            previousDepth = depth;
             var referrer = item.GetProperty("referrer");
-            Fields(referrer, "hostname", "destinationHostname");
-            var parent = new I2pCrawlReferrer(Text(referrer, "hostname", 253), Text(referrer, "destinationHostname", 60));
-            Require(identities.Contains(parent), "Referrer must exactly identify a selected known seed.");
+            Fields(referrer, depth == 1 ? ["hostname", "destinationHostname"] : ["hostname", "hostForm"]);
+            var parent = depth == 1
+                ? new I2pCrawlReferrer(Text(referrer, "hostname", 253), Text(referrer, "destinationHostname", 60))
+                : new I2pCrawlReferrer(Text(referrer, "hostname", 253), null, EnumValue<I2pDiscoveredHostForm>(referrer, "hostForm"));
+            I2pCrawlEvidence parentEvidence;
+            if (depth == 1)
+            {
+                Require(identities.Contains(parent), "Referrer must exactly identify a selected known seed.");
+                parentEvidence = known.First(k => k.Hostname == parent.Hostname && k.DestinationHostname == parent.DestinationHostname).Evidence;
+            }
+            else
+            {
+                Require(byHostname.TryGetValue(parent.Hostname, out var parentHost) && parentHost.Depth == depth - 1 && parentHost.HostForm == parent.HostForm,
+                    "Host-only referrer must identify a host in the immediately preceding wave.");
+                parentEvidence = byHostname[parent.Hostname].Evidence;
+            }
+            if (version == 2)
+                Require(parentEvidence.ToObservation() is { } observation && I2pHostDiscovery.Eligible(observation) &&
+                    observation.HomepageMetadata!.Links.Any(l => I2pHostDiscovery.Candidate(l)?.Hostname == hostname),
+                    "Referrer must contain eligible discovery evidence for its child.");
             var evidence = Evidence(item.GetProperty("evidence"), started, completed);
-            Require(evidence.StartedAtUtc >= knownCompleted, "Depth 1 precedes the depth-0 barrier.");
-            hosts.Add(new(hostname, target.HostForm, Integer(item, "depth", 1, 1), parent, evidence));
+            Require(waveCompleted.TryGetValue(depth - 1, out var barrier) && evidence.StartedAtUtc >= barrier,
+                "Discovered observation precedes its breadth-first barrier.");
+            waveCompleted[depth] = waveCompleted.TryGetValue(depth, out var end) && end > evidence.CompletedAtUtc ? end : evidence.CompletedAtUtc;
+            var host = new I2pCrawlHostResult(hostname, target.HostForm, depth, parent, evidence);
+            hosts.Add(host);
+            byHostname.Add(hostname, host);
         }
         var immutableKnown = known.ToImmutable();
         var immutableHosts = hosts.ToImmutable();
         var evidenceAll = immutableKnown.Select(r => r.Evidence).Concat(immutableHosts.Select(r => r.Evidence)).ToArray();
-        var metrics = Metrics(root.GetProperty("metrics"), evidenceAll, settings, Math.Max(count, admitted));
-        var result = new I2pRawCrawlArtifact(I2pRawCrawlArtifact.CurrentSchema, 1, started, completed, snapshot, proxyIdentity,
+        var largestWave = Math.Max(count, immutableHosts.GroupBy(h => h.Depth).Select(g => g.Count()).DefaultIfEmpty().Max());
+        var metrics = Metrics(root.GetProperty("metrics"), evidenceAll, settings, largestWave);
+        var result = new I2pRawCrawlArtifact(I2pRawCrawlArtifact.CurrentSchema, version, started, completed, snapshot, proxyIdentity,
             settings, snapshotCount, new(references, admitted, limited), immutableKnown, immutableHosts, metrics);
         Require(result.TextCharacters() <= I2pCrawlService.MaxRetainedTextCharacters, "Crawl exceeds retained evidence budget.");
         token.ThrowIfCancellationRequested();

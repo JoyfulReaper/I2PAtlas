@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using I2PAtlas.AddressBook;
 using I2PAtlas.I2pProbing;
 using I2PAtlas.I2pTransport;
@@ -21,8 +22,12 @@ internal sealed class I2pCrawlDiscoverySettings
 
 // Only explicitly supplied selected/probed parents provide discovery evidence.
 internal sealed record I2pCrawlSeedObservation(I2pProbeTarget.KnownSeed Target, I2pProbeObservation Observation);
+internal sealed record I2pCrawlParentObservation(I2pCrawlReferrer Referrer, I2pProbeObservation Observation);
 
-internal readonly record struct I2pCrawlReferrer(string Hostname, string DestinationHostname) : IComparable<I2pCrawlReferrer>
+// Exclusive shapes: known parent has destinationHostname; host-only parent has hostForm.
+internal readonly record struct I2pCrawlReferrer(string Hostname,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DestinationHostname,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] I2pDiscoveredHostForm? HostForm = null) : IComparable<I2pCrawlReferrer>
 {
     internal static I2pCrawlReferrer FromSeed(I2pSeed seed)
     {
@@ -38,10 +43,7 @@ internal readonly record struct I2pCrawlReferrer(string Hostname, string Destina
 }
 
 // No original URL, destination material, body or backlink collection is retained.
-internal sealed record I2pCrawlWorkItem(I2pProbeTarget.DiscoveredHost Target, I2pCrawlReferrer FirstReferrer)
-{
-    internal int Depth => 1;
-}
+internal sealed record I2pCrawlWorkItem(I2pProbeTarget.DiscoveredHost Target, I2pCrawlReferrer FirstReferrer, int Depth = 1);
 
 // Reference count includes repeated eligible unknown URLs/parents, not unique rejected hosts.
 internal sealed record I2pCrawlFrontier(

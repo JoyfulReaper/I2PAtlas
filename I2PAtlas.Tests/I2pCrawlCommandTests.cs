@@ -12,7 +12,7 @@ public sealed class I2pCrawlCommandTests
     [DataRow("--timeout-ms", "0")][DataRow("--timeout-ms", "60001")]
     [DataRow("--max-seeds", "0")][DataRow("--max-seeds", "10001")]
     [DataRow("--max-discovered-hosts", "-1")][DataRow("--max-discovered-hosts", "1001")]
-    [DataRow("--max-depth", "1")][DataRow("--unknown", "1")]
+    [DataRow("--max-depth", "0")][DataRow("--max-depth", "4")][DataRow("--unknown", "1")]
     [DataRow("--concurrency", "two")][DataRow("--concurrency", "+1")]
     public async Task InvalidOptionsAreUsageErrorsWithoutReadingInputOrMutatingOutput(string option, string value)
     {
@@ -56,14 +56,15 @@ public sealed class I2pCrawlCommandTests
     }
 
     [TestMethod]
-    public void SettingsHaveOnlyFourStrictlyBoundedV1Controls()
+    public void SettingsHaveFiveStrictlyBoundedControlsWithCompatibleDepthDefault()
     {
         var defaults = new I2pCrawlSettings();
         Assert.AreEqual(2, defaults.Concurrency);
         Assert.AreEqual(10000, defaults.RequestTimeoutMilliseconds);
         Assert.AreEqual(10000, defaults.MaximumSeeds);
         Assert.AreEqual(100, defaults.MaximumDiscoveredHosts);
-        CollectionAssert.AreEquivalent(new[] { "Concurrency", "RequestTimeoutMilliseconds", "MaximumSeeds", "MaximumDiscoveredHosts" },
+        Assert.AreEqual(1, defaults.MaximumDepth);
+        CollectionAssert.AreEquivalent(new[] { "Concurrency", "RequestTimeoutMilliseconds", "MaximumSeeds", "MaximumDiscoveredHosts", "MaximumDepth" },
             typeof(I2pCrawlSettings).GetProperties().Select(p => p.Name).ToArray());
         _ = new I2pCrawlSettings(1, 1, 1, 0);
         _ = new I2pCrawlSettings(4, 60000, 10000, 1000);
@@ -71,6 +72,8 @@ public sealed class I2pCrawlCommandTests
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new I2pCrawlSettings(requestTimeoutMilliseconds: 60001));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new I2pCrawlSettings(maximumSeeds: 10001));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new I2pCrawlSettings(maximumDiscoveredHosts: 1001));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new I2pCrawlSettings(maximumDepth: 0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new I2pCrawlSettings(maximumDepth: 4));
     }
 
     [TestMethod]
@@ -85,7 +88,9 @@ public sealed class I2pCrawlCommandTests
         using var error = new StringWriter();
         Assert.AreEqual(0, await I2pCrawlCommand.ExecuteAsync(["i2p-crawl", input, outputPath, proxy.Uri,
             "--max-discovered-hosts", "0", "--max-seeds", "1", "--concurrency", "1", "--timeout-ms", "1000"], output, error));
-        Assert.AreEqual("", error.ToString());
+        Assert.Contains("Depth 0 complete: 1 probed", error.ToString());
+        foreach (var secret in new[] { seed.Hostname, seed.Destination, B32(seed), proxy.Uri, "PRIVATE_ERROR_BODY" })
+            Assert.DoesNotContain(secret, error.ToString());
         Assert.Contains("Responses remain unauthenticated", output.ToString());
         Assert.IsLessThan(512, output.ToString().Length);
         Assert.DoesNotContain(seed.Destination, output.ToString());

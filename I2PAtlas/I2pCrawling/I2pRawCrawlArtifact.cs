@@ -1,27 +1,52 @@
 using System.Collections.Immutable;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using I2PAtlas.I2pProbing;
 using I2PAtlas.I2pTransport;
 
 namespace I2PAtlas.I2pCrawling;
 
+[JsonConverter(typeof(I2pCrawlSettingsJsonConverter))]
 internal sealed class I2pCrawlSettings
 {
     public int Concurrency { get; }
     public int RequestTimeoutMilliseconds { get; }
     public int MaximumSeeds { get; }
     public int MaximumDiscoveredHosts { get; }
+    public int MaximumDepth { get; }
+    internal bool HasExplicitDepth { get; }
 
     internal I2pCrawlSettings(int concurrency = 2, int requestTimeoutMilliseconds = 10000,
-        int maximumSeeds = 10000, int maximumDiscoveredHosts = 100)
+        int maximumSeeds = 10000, int maximumDiscoveredHosts = 100, int? maximumDepth = null)
     {
         if (concurrency is < 1 or > 4) throw new ArgumentOutOfRangeException(nameof(concurrency));
         if (requestTimeoutMilliseconds is < 1 or > 60000) throw new ArgumentOutOfRangeException(nameof(requestTimeoutMilliseconds));
         if (maximumSeeds is < 1 or > 10000) throw new ArgumentOutOfRangeException(nameof(maximumSeeds));
         if (maximumDiscoveredHosts is < 0 or > 1000) throw new ArgumentOutOfRangeException(nameof(maximumDiscoveredHosts));
+        if (maximumDepth is < 1 or > 3) throw new ArgumentOutOfRangeException(nameof(maximumDepth));
         Concurrency = concurrency;
         RequestTimeoutMilliseconds = requestTimeoutMilliseconds;
         MaximumSeeds = maximumSeeds;
         MaximumDiscoveredHosts = maximumDiscoveredHosts;
+        MaximumDepth = maximumDepth ?? 1;
+        HasExplicitDepth = maximumDepth.HasValue;
+    }
+}
+
+// v1 retains its exact four-field shape. Only the strict reader deserializes settings.
+internal sealed class I2pCrawlSettingsJsonConverter : JsonConverter<I2pCrawlSettings>
+{
+    public override I2pCrawlSettings Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) =>
+        throw new NotSupportedException("Use the strict raw crawl reader.");
+    public override void Write(Utf8JsonWriter writer, I2pCrawlSettings value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("concurrency", value.Concurrency);
+        writer.WriteNumber("requestTimeoutMilliseconds", value.RequestTimeoutMilliseconds);
+        writer.WriteNumber("maximumSeeds", value.MaximumSeeds);
+        writer.WriteNumber("maximumDiscoveredHosts", value.MaximumDiscoveredHosts);
+        if (value.HasExplicitDepth) writer.WriteNumber("maximumDepth", value.MaximumDepth);
+        writer.WriteEndObject();
     }
 }
 
@@ -111,10 +136,10 @@ internal sealed record I2pRawCrawlArtifact(string Schema, int Version, DateTimeO
     ImmutableArray<I2pCrawlHostResult> DiscoveredHostResults, I2pCrawlMetrics Metrics)
 {
     internal const string CurrentSchema = "i2patlas.raw-crawl";
-    internal const int CurrentVersion = 1;
+    internal const int CurrentVersion = 2;
     public int SelectedSeedCount => KnownSeedResults.Length;
     public bool SeedLimitApplied => SelectedSeedCount < SnapshotSeedCount;
     internal IEnumerable<I2pCrawlEvidence> Evidence => KnownSeedResults.Select(r => r.Evidence).Concat(DiscoveredHostResults.Select(r => r.Evidence));
     internal long TextCharacters() => KnownSeedResults.Sum(r => (long)r.Hostname.Length + r.Destination.Length + r.DestinationHostname.Length + r.Evidence.TextCharacters()) +
-        DiscoveredHostResults.Sum(r => (long)r.Hostname.Length + r.Referrer.Hostname.Length + r.Referrer.DestinationHostname.Length + r.Evidence.TextCharacters());
+        DiscoveredHostResults.Sum(r => (long)r.Hostname.Length + r.Referrer.Hostname.Length + (r.Referrer.DestinationHostname?.Length ?? 0) + r.Evidence.TextCharacters());
 }

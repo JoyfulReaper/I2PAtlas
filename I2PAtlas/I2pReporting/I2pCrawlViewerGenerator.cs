@@ -85,6 +85,8 @@ public sealed class I2pCrawlViewerGenerator
         if (crawl.Entries.Length == 0) Add("empty", "<p>No public crawl entries.</p>");
         var parents = crawl.Entries.OfType<I2pPublicCrawlEntry.KnownSeed>()
             .ToDictionary(k => (k.Hostname, k.DestinationHostname), k => Id(k));
+        var hostParents = crawl.Entries.OfType<I2pPublicCrawlEntry.DiscoveredHost>()
+            .ToDictionary(h => h.Hostname, h => Id(h), StringComparer.Ordinal);
         foreach (var entry in crawl.Entries)
         {
             token.ThrowIfCancellationRequested();
@@ -117,7 +119,9 @@ public sealed class I2pCrawlViewerGenerator
                 Field("Host form", discovered.HostForm.ToString());
                 Field("Identity", "Host-only reference; no imported destination identity");
                 Add("details", $"<dt>Referrer hostname</dt><dd>{ParentLink(discovered)}</dd>");
-                Field("Referrer destination-derived B32 hostname", discovered.ReferrerDestinationHostname);
+                if (discovered.ReferrerDestinationHostname != null)
+                    Field("Referrer destination-derived B32 hostname", discovered.ReferrerDestinationHostname);
+                else Field("Referrer host form (host-only identity)", discovered.ReferrerHostForm?.ToString());
                 Add("details", $"</dl><p>{Link(discovered.Hostname, "Open observed hostname in I2P")}</p><dl>");
             }
             Field("Summary state", state + " (" + e.SummaryState + ")");
@@ -156,8 +160,13 @@ public sealed class I2pCrawlViewerGenerator
         }
         void Stat(int count, string label) => Add("stats", $"<div class=\"stat\"><strong>{count}</strong> {E(label)}</div>");
         void Field(string label, string? value) => Add("details", $"<dt>{E(label)}</dt><dd>{E(string.IsNullOrEmpty(value) ? "Not observed" : value)}</dd>");
-        string ParentLink(I2pPublicCrawlEntry.DiscoveredHost host) => parents.TryGetValue((host.ReferrerHostname, host.ReferrerDestinationHostname), out var parent)
-            ? $"<a href=\"#{parent}\">{E(host.ReferrerHostname)}</a>" : E(host.ReferrerHostname);
+        string ParentLink(I2pPublicCrawlEntry.DiscoveredHost host)
+        {
+            var found = host.ReferrerDestinationHostname is { } b32
+                ? parents.TryGetValue((host.ReferrerHostname, b32), out var parent)
+                : hostParents.TryGetValue(host.ReferrerHostname, out parent);
+            return found ? $"<a href=\"#{parent}\">{E(host.ReferrerHostname)}</a>" : E(host.ReferrerHostname);
+        }
     }
 
     internal static string Id(I2pPublicCrawlEntry entry)
@@ -165,7 +174,8 @@ public sealed class I2pCrawlViewerGenerator
         var material = entry switch
         {
             I2pPublicCrawlEntry.KnownSeed known => "KnownSeed\n" + known.Hostname + "\n" + known.DestinationHostname,
-            I2pPublicCrawlEntry.DiscoveredHost host => "DiscoveredHost\n" + host.Hostname + "\n" + host.ReferrerHostname + "\n" + host.ReferrerDestinationHostname,
+            I2pPublicCrawlEntry.DiscoveredHost host => "DiscoveredHost\n" + host.Hostname + "\n" + host.ReferrerHostname + "\n" +
+                (host.ReferrerDestinationHostname ?? "HostOnly:" + host.ReferrerHostForm),
             _ => throw new InvalidDataException("Unsupported crawl entry kind.")
         };
         return "i2p-crawl-entry-" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)));

@@ -7,7 +7,7 @@ using I2PAtlas.I2pTransport;
 
 namespace I2PAtlas.I2pPublishing;
 
-/// <summary>Strict local public-crawl v1 boundary. Never repairs ordering or infers destination identity.</summary>
+/// <summary>Strict local public-crawl v1/v2 boundary. Never repairs ordering or infers destination identity.</summary>
 public static class I2pPublicCrawlReader
 {
     public const int MaxArtifactBytes = 128 * 1024 * 1024;
@@ -46,8 +46,9 @@ public static class I2pPublicCrawlReader
     private static I2pPublicCrawl Read(JsonElement root, CancellationToken token)
     {
         Fields(root, "schema", "version", "crawlStartedAtUtc", "crawlCompletedAtUtc", "knownSeedCount", "discoveredHostCount", "entries");
-        Require(Text(root, "schema", 64) == I2pPublicCrawl.CurrentSchema && Integer(root, "version", 1, 1) == 1,
-            "Expected i2patlas.public-crawl version 1.");
+        var version = Integer(root, "version", 1, 2);
+        Require(Text(root, "schema", 64) == I2pPublicCrawl.CurrentSchema,
+            "Expected i2patlas.public-crawl version 1 or 2.");
         var started = Timestamp(root, "crawlStartedAtUtc");
         var completed = Timestamp(root, "crawlCompletedAtUtc");
         Require(started <= completed, "Crawl completion precedes crawl start.");
@@ -60,15 +61,20 @@ public static class I2pPublicCrawlReader
         var knownNames = new HashSet<string>(StringComparer.Ordinal);
         (string Hostname, string DestinationHostname)? previousKnown = null;
         string? previousHost = null;
+        var previousDepth = 1;
+        var byHostname = new Dictionary<string, I2pPublicCrawlEntry.DiscoveredHost>(StringComparer.Ordinal);
         var discoveredSeen = false;
         foreach (var item in array.EnumerateArray())
         {
             token.ThrowIfCancellationRequested();
             Require(item.ValueKind == JsonValueKind.Object && item.TryGetProperty("kind", out _), "Missing entry kind.");
             var kind = EnumValue<I2pPublicCrawlEntryKind>(item, "kind")!.Value;
+            var depth = Integer(item, "depth", kind == I2pPublicCrawlEntryKind.KnownSeed ? 0 : 1,
+                kind == I2pPublicCrawlEntryKind.KnownSeed ? 0 : version == 1 ? 1 : 3);
             Fields(item, kind == I2pPublicCrawlEntryKind.KnownSeed
                 ? ["kind", "hostname", "destinationHostname", "depth", "observation"]
-                : ["kind", "hostname", "hostForm", "depth", "referrerHostname", "referrerDestinationHostname", "observation"]);
+                : depth == 1 ? ["kind", "hostname", "hostForm", "depth", "referrerHostname", "referrerDestinationHostname", "observation"]
+                : ["kind", "hostname", "hostForm", "depth", "referrerHostname", "referrerHostForm", "observation"]);
             var hostname = Host(Text(item, "hostname", 253));
             var observation = Observation(item.GetProperty("observation"));
             if (kind == I2pPublicCrawlEntryKind.KnownSeed)
@@ -88,21 +94,44 @@ public static class I2pPublicCrawlReader
             else
             {
                 discoveredSeen = true;
-                Integer(item, "depth", 1, 1);
                 var target = new I2pProbeTarget.DiscoveredHost(hostname);
                 var form = EnumValue<I2pPublicCrawlHostForm>(item, "hostForm")!.Value;
                 Require((form == I2pPublicCrawlHostForm.ClassicBase32) == (target.HostForm == I2pDiscoveredHostForm.ClassicBase32),
                     "Discovered host form disagrees with its hostname.");
-                Require(!knownNames.Contains(hostname) && (previousHost == null || string.CompareOrdinal(previousHost, hostname) < 0),
+                Require(!knownNames.Contains(hostname) && !byHostname.ContainsKey(hostname) &&
+                    (previousHost == null ? depth == 1 : depth == previousDepth && string.CompareOrdinal(previousHost, hostname) < 0 || depth == previousDepth + 1),
                     "Discovered hosts must be ordered, unique and distinct from known hosts.");
                 previousHost = hostname;
+                previousDepth = depth;
                 var referrer = Host(Text(item, "referrerHostname", 253));
-                var referrerB32 = B32(Text(item, "referrerDestinationHostname", 60));
-                Require(identities.Contains((referrer, referrerB32)), "Referrer must exactly identify one public known seed.");
-                entries.Add(new I2pPublicCrawlEntry.DiscoveredHost(hostname, form, referrer, referrerB32, observation));
+                string? referrerB32 = null;
+                I2pPublicCrawlHostForm? referrerForm = null;
+                I2pPublicCrawlObservation parentObservation;
+                if (depth == 1)
+                {
+                    referrerB32 = B32(Text(item, "referrerDestinationHostname", 60));
+                    Require(identities.Contains((referrer, referrerB32)), "Referrer must exactly identify one public known seed.");
+                    parentObservation = entries.OfType<I2pPublicCrawlEntry.KnownSeed>()
+                        .First(k => k.Hostname == referrer && k.DestinationHostname == referrerB32).Observation;
+                }
+                else
+                {
+                    referrerForm = EnumValue<I2pPublicCrawlHostForm>(item, "referrerHostForm");
+                    Require(byHostname.TryGetValue(referrer, out var parent) && parent.Depth == depth - 1 && parent.HostForm == referrerForm,
+                        "Host-only referrer must identify an entry at the immediately preceding depth.");
+                    parentObservation = byHostname[referrer].Observation;
+                }
+                if (version == 2)
+                    Require(parentObservation.HomepageStatusCode == 200 && !parentObservation.LinkExtractionIncomplete &&
+                        parentObservation.HomepageContentType is "text/html" or "application/xhtml+xml" &&
+                        parentObservation.DiscoveredI2pHostnames.Contains(hostname, StringComparer.Ordinal),
+                        "Parent must contain eligible public discovery evidence for its child.");
+                var host = new I2pPublicCrawlEntry.DiscoveredHost(hostname, form, referrer, referrerB32, observation, depth, referrerForm);
+                entries.Add(host);
+                byHostname.Add(hostname, host);
             }
         }
-        var result = new I2pPublicCrawl(started, completed, entries.MoveToImmutable());
+        var result = new I2pPublicCrawl(started, completed, entries.MoveToImmutable(), version);
         Require(result.KnownSeedCount == knownCount && result.DiscoveredHostCount == hostCount, "Entry kinds disagree with counts.");
         token.ThrowIfCancellationRequested();
         return result;

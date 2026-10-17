@@ -97,7 +97,7 @@ public sealed class I2pCrawlViewerGenerator
             Add("rows", $"""
                 <tr data-entry="{id}" data-hostname="{E(entry.Hostname)}" data-kind="{E(entry.Kind.ToString())}" data-summary="{E(e.SummaryState.ToString())}" data-http="{Number(e.HomepageStatusCode)}" data-search="{E(entry.Hostname + " " + (e.Title ?? ""))}">
                 <td headers="column-kind"><span class="badge">{E(kind)}</span></td>
-                <th scope="row" headers="column-hostname"><a href="#{id}">{E(entry.Hostname)}</a></th>
+                <th scope="row" headers="column-hostname"><a href="#{id}">{E(entry.Hostname)}</a> · {Link(entry.Hostname, "Open ↗")}</th>
                 <td headers="column-depth">{entry.Depth}</td><td headers="column-title">{E(title)}</td>
                 <td headers="column-summary">{E(state)}</td><td headers="column-http">{E(Number(e.HomepageStatusCode) is { Length: > 0 } http ? http : "Not observed")}</td>
                 <td headers="column-referrer">{referrer}</td></tr>

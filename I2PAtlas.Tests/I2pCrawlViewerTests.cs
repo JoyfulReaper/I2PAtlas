@@ -89,6 +89,29 @@ public sealed class I2pCrawlViewerTests
     }
 
     [TestMethod]
+    [DataRow("KnownSeed")][DataRow("Friendly")][DataRow("ClassicBase32")]
+    public void DirectoryRowsKeepDetailLinksAndOfferSafeDirectLinksToTheirActualHostnames(string kind)
+    {
+        var crawl = Fixture();
+        var html = I2pCrawlViewerGenerator.GenerateHtml(crawl);
+        var entries = crawl.Entries.Where(e => kind == "KnownSeed" ? e is I2pPublicCrawlEntry.KnownSeed
+            : e is I2pPublicCrawlEntry.DiscoveredHost host && host.HostForm.ToString() == kind).ToArray();
+        Assert.IsNotEmpty(entries);
+        foreach (var entry in entries)
+        {
+            var id = I2pCrawlViewerGenerator.Id(entry);
+            var row = Regex.Match(html, "<tr data-entry=\"" + id + "\"[\\s\\S]*?</tr>").Value;
+            Assert.Contains($"<a href=\"#{id}\">{WebUtility.HtmlEncode(entry.Hostname)}</a>", row);
+            Assert.Contains($"<a href=\"http://{WebUtility.HtmlEncode(entry.Hostname)}/\" target=\"_blank\" rel=\"noopener noreferrer\">{WebUtility.HtmlEncode("Open ↗")}</a>", row);
+            Assert.HasCount(1, Regex.Matches(row, "href=\"http://"));
+            Assert.DoesNotContain(" hidden", row);
+            if (entry is I2pPublicCrawlEntry.KnownSeed known)
+                Assert.DoesNotContain($"href=\"http://{known.DestinationHostname}/\"", row);
+            if (kind == "Friendly") Assert.DoesNotContain(".b32.i2p", row);
+        }
+    }
+
+    [TestMethod]
     public async Task HostileButValidTitleIsTextAndUnicodeAndPlaceholderTextRoundTrip()
     {
         using var files = new TemporaryFiles();
@@ -122,6 +145,13 @@ public sealed class I2pCrawlViewerTests
         Assert.DoesNotContain("<svg", html);
         Assert.DoesNotContain("href=\"http://", html);
         Assert.HasCount(2, Regex.Matches(html, "<article class=\"crawl-detail\""));
+        foreach (var entry in new I2pPublicCrawlEntry[] { known, discovered })
+        {
+            var row = Regex.Match(html, "<tr data-entry=\"" + I2pCrawlViewerGenerator.Id(entry) + "\"[\\s\\S]*?</tr>").Value;
+            Assert.Contains(">" + WebUtility.HtmlEncode(entry.Hostname) + "</a>", row);
+            Assert.DoesNotContain("<svg", row);
+            Assert.DoesNotContain("href=\"http://", row);
+        }
     }
 
     [TestMethod]

@@ -362,9 +362,13 @@ DiscoveredHost\n<hostname>\n<referrerHostname>\n<referrerDestinationHostname>
 
 Observations, times and array position do not affect IDs. Native detail and parent
 anchors work with JavaScript disabled. Enhancement only searches hostname/title,
-filters Kind/Summary and sorts directory rows by hostname, kind, summary or numeric
-homepage HTTP. Reset clears filters and retains sorting; missing HTTP statuses
-sort last in either direction. All directory entries are initially shown. Detail
+filters View/Kind/Summary and sorts directory rows by hostname, kind, summary or numeric
+homepage HTTP. View defaults to Likely reachable: exactly `HomepageResponseObserved`,
+an unauthenticated proxy observation of a homepage HTTP response, not origin/liveness
+verification. All entries restores the directory, subject to independent search,
+Kind and Summary filters. Reset restores Likely reachable, clears other filters
+and retains sorting; missing HTTP statuses sort last in either direction. Without
+JavaScript or on enhancement failure, all directory rows remain available. Detail
 articles remain in the HTML but are hidden until selected by CSS `:target`, with
 no JavaScript requirement. Back to directory hides the selected article. Filters
 never control detail visibility, so filtered rows cannot make deep links inaccessible.

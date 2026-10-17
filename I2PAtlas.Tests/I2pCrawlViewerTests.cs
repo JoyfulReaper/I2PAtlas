@@ -46,6 +46,10 @@ public sealed class I2pCrawlViewerTests
         foreach (Match tag in Regex.Matches(html, "<(?:tr data-entry=|article class=\"crawl-detail\")[^>]*>")) Assert.DoesNotContain(" hidden", tag.Value);
         Assert.Contains("<noscript>", html);
         Assert.Contains("id=\"crawl-controls\" class=\"controls\" hidden", html);
+        Assert.Contains("<label>View <select id=\"crawl-view\" aria-describedby=\"crawl-view-help\">", html);
+        Assert.Contains("<option value=\"likely\" selected>Likely reachable</option>", html);
+        Assert.Contains("<option value=\"all\">All entries</option>", html);
+        Assert.Contains("a homepage HTTP response was observed through the proxy; it is not origin or liveness verification", html);
         Assert.Contains("observations through an unauthenticated proxy", html);
         Assert.Contains("not origin verification, ownership or liveness claims", html);
         await new I2pCrawlViewerGenerator().GenerateAsync(input, output);

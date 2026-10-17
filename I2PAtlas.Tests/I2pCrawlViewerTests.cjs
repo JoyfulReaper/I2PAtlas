@@ -14,9 +14,9 @@ function element(id) {
         setAttribute(k, v) { attributes.set(k, v); }, removeAttribute(k) { attributes.delete(k); }, getAttribute(k) { return attributes.get(k); },
         addEventListener(k, fn) { this.events[k] = fn; }, click() { if (!this.disabled) this.events.click?.(); } };
 }
-function viewer({ data, restored = {}, failSort = false } = {}) {
+function viewer({ data, restored = {}, failSort = false, allEntries = false, javascript = true } = {}) {
     const ui = Object.fromEntries(['crawl-entries', 'crawl-controls', 'crawl-search', 'crawl-kind', 'crawl-summary', 'crawl-reset',
-        'crawl-counter', 'crawl-no-matches'].map(id => [id, element(id)]));
+        'crawl-counter', 'crawl-no-matches', 'crawl-view'].map(id => [id, element(id)]));
     ui['crawl-controls'].hidden = ui['crawl-no-matches'].hidden = true;
     Object.entries(restored).forEach(([id, value]) => { ui['crawl-' + id].value = value; });
     const rows = (data ?? [
@@ -48,7 +48,8 @@ function viewer({ data, restored = {}, failSort = false } = {}) {
         return header;
     });
     const document = { getElementById: id => ui[id], querySelectorAll: selector => { assert.equal(selector, 'th[data-sort]'); return headers; } };
-    vm.runInNewContext(script, { document }); // No network, navigation or executable-data APIs are available.
+    if (javascript) vm.runInNewContext(script, { document }); // No network, navigation or executable-data APIs are available.
+    if (allEntries && !failSort) { ui['crawl-view'].value = 'all'; ui['crawl-view'].events.change(); }
     return { ui, rows, panels, headers,
         visible: () => body.children.filter(row => !row.hidden).map(row => row.dataset.entry.slice(16)),
         filter(key, value) { ui['crawl-' + key].value = value; ui['crawl-' + key].events[key === 'search' ? 'input' : 'change'](); },
@@ -58,17 +59,18 @@ function viewer({ data, restored = {}, failSort = false } = {}) {
     };
 }
 
-test('initial inspection shows every entry including errors and missing homepages, ignoring restored filters', () => {
-    const v = viewer({ restored: { search: 'stale', kind: 'DiscoveredHost', summary: 'RequestTimedOut' } });
-    assert.deepEqual(v.visible(), ['c', 'd', 'a', 'b', 'e']);
+test('initial likely reachable view shows only observed homepage responses, ignoring restored filters', () => {
+    const v = viewer({ restored: { view: 'all', search: 'stale', kind: 'DiscoveredHost', summary: 'RequestTimedOut' } });
+    assert.deepEqual(v.visible(), ['c', 'a', 'e']); // Includes HTTP 404: this is a response observation, not a 200-only claim.
+    assert.equal(v.ui['crawl-view'].value, 'likely');
     assert.equal(v.ui['crawl-controls'].hidden, false);
     for (const key of ['search', 'kind', 'summary']) assert.equal(v.ui['crawl-' + key].value, '');
-    assert.equal(v.ui['crawl-counter'].textContent, '5 matching / 5 public entries');
+    assert.equal(v.ui['crawl-counter'].textContent, '3 likely reachable / 5 public entries');
     assert.equal(v.ui['crawl-no-matches'].hidden, true);
 });
 
 test('hostname and title search is case-insensitive and preserves Unicode and literal markup text', () => {
-    const v = viewer();
+    const v = viewer({ allEntries: true });
     v.filter('search', ' PLUGINS.I2P '); assert.deepEqual(v.visible(), ['a', 'b']);
     v.filter('search', 'zULu'); assert.deepEqual(v.visible(), ['a']);
     v.filter('search', '東京 🧅'); assert.deepEqual(v.visible(), ['e']);
@@ -76,27 +78,68 @@ test('hostname and title search is case-insensitive and preserves Unicode and li
     assert.equal(v.rows.find(r => r.dataset.entry.endsWith('-d')).dataset.search, 'delta.i2p <img src=x> literal');
 });
 
-test('Kind filter keeps alternate known destinations distinct and supports both kinds and All', () => {
+test('View depends only on HomepageResponseObserved and All entries restores every other summary state', () => {
+    const states = ['HomepageResponseObserved', 'HomepageAttemptFailed', 'RobotsDisallowed', 'ProxyFailureObserved',
+        'RequestTimedOut', 'TransportFailure', 'RobotsRedirect', 'Ambiguous', 'HomepageResponseObserved'];
+    const data = states.map((summary, i) => ['s' + i, 'host' + i + '.i2p', 'KnownSeed', '', summary, i === 0 ? '502' : i === 8 ? '404' : '']);
+    const v = viewer({ data });
+    assert.deepEqual(v.visible(), ['s0', 's8']);
+    assert.equal(v.ui['crawl-counter'].textContent, '2 likely reachable / 9 public entries');
+    v.filter('view', 'all'); assert.equal(v.visible().length, 9);
+    assert.equal(v.ui['crawl-counter'].textContent, '9 matching / 9 public entries');
+    v.filter('summary', 'RobotsDisallowed'); assert.deepEqual(v.visible(), ['s2']);
+    v.filter('view', 'likely'); assert.deepEqual(v.visible(), []);
+    assert.equal(v.ui['crawl-summary'].value, 'RobotsDisallowed', 'Summary filter must remain independent of View.');
+    v.filter('view', 'all'); assert.deepEqual(v.visible(), ['s2']);
+    v.reset(); assert.deepEqual(v.visible(), ['s0', 's8']);
+});
+
+test('View composes with search, Kind and Summary without silently broadening an empty default', () => {
     const v = viewer();
+    v.filter('search', 'plugins'); assert.deepEqual(v.visible(), ['a']);
+    v.filter('summary', 'HomepageAttemptFailed'); assert.deepEqual(v.visible(), []);
+    assert.equal(v.ui['crawl-view'].value, 'likely');
+    v.filter('view', 'all'); assert.deepEqual(v.visible(), ['b']);
+    v.filter('kind', 'DiscoveredHost'); assert.deepEqual(v.visible(), []);
+    v.filter('kind', 'KnownSeed'); assert.deepEqual(v.visible(), ['b']);
+    v.reset(); assert.deepEqual(v.visible(), ['c', 'a', 'e']);
+    const ambiguous = viewer({ data: [['x', 'unknown.i2p', 'DiscoveredHost', '', 'Ambiguous', '']] });
+    assert.deepEqual(ambiguous.visible(), []);
+    assert.equal(ambiguous.ui['crawl-controls'].hidden, false);
+    ambiguous.filter('view', 'all'); assert.deepEqual(ambiguous.visible(), ['x']);
+});
+
+test('without JavaScript every static row remains available and View controls stay hidden', () => {
+    const v = viewer({ javascript: false });
+    assert.equal(v.visible().length, 5);
+    assert.ok(v.rows.every(row => !row.hidden));
+    assert.equal(v.ui['crawl-controls'].hidden, true);
+    assert.ok(v.rows.every(row => Object.keys(row.anchor.events).length === 0));
+});
+
+test('Kind filter keeps alternate known destinations distinct and supports both kinds and All', () => {
+    const v = viewer({ allEntries: true });
     v.filter('kind', 'KnownSeed'); assert.deepEqual(v.visible(), ['a', 'b', 'e']);
     v.filter('kind', 'DiscoveredHost'); assert.deepEqual(v.visible(), ['c', 'd']);
     v.filter('kind', ''); assert.equal(v.visible().length, 5);
 });
 
 test('summary and search filters compose, and reset clears all filters while retaining the selected sort', () => {
-    const v = viewer();
+    const v = viewer({ allEntries: true });
     v.sort('kind');
     v.filter('summary', 'HomepageResponseObserved'); assert.deepEqual(v.visible(), ['a', 'e', 'c']);
     v.filter('kind', 'DiscoveredHost'); assert.deepEqual(v.visible(), ['c']);
     v.filter('search', 'absent'); assert.deepEqual(v.visible(), []);
     assert.equal(v.ui['crawl-no-matches'].hidden, false);
-    v.reset(); assert.deepEqual(v.visible(), ['a', 'b', 'e', 'c', 'd']);
+    v.reset(); assert.deepEqual(v.visible(), ['a', 'e', 'c']);
+    assert.equal(v.ui['crawl-view'].value, 'likely');
+    for (const key of ['search', 'kind', 'summary']) assert.equal(v.ui['crawl-' + key].value, '');
     assert.equal(v.ui['crawl-no-matches'].hidden, true);
     assert.equal(v.headers.find(h => h.dataset.sort === 'kind').getAttribute('aria-sort'), 'ascending');
 });
 
 test('hostname, kind and summary sorting toggle with accessible direction indicators', () => {
-    const v = viewer();
+    const v = viewer({ allEntries: true });
     v.sort('hostname'); assert.deepEqual(v.visible(), ['e', 'a', 'b', 'd', 'c']);
     v.sort('kind'); assert.deepEqual(v.visible(), ['a', 'b', 'e', 'c', 'd']);
     v.sort('kind'); assert.deepEqual(v.visible(), ['c', 'd', 'a', 'b', 'e']);
@@ -107,7 +150,7 @@ test('hostname, kind and summary sorting toggle with accessible direction indica
 });
 
 test('homepage HTTP sort is numeric and missing observations stay last in either direction', () => {
-    const v = viewer();
+    const v = viewer({ allEntries: true });
     v.sort('http'); assert.deepEqual(v.visible(), ['a', 'e', 'c', 'd', 'b']);
     v.sort('http'); assert.deepEqual(v.visible(), ['c', 'a', 'e', 'd', 'b']);
     v.filter('kind', 'KnownSeed'); assert.deepEqual(v.visible(), ['a', 'e', 'b']);
@@ -115,7 +158,7 @@ test('homepage HTTP sort is numeric and missing observations stay last in either
 
 test('identity breaks ties deterministically without merging same-hostname entries', () => {
     const data = [['b', 'same.i2p', 'KnownSeed', '', 'Ambiguous', ''], ['a', 'same.i2p', 'KnownSeed', '', 'Ambiguous', '']];
-    const first = viewer({ data }), second = viewer({ data: [...data].reverse() });
+    const first = viewer({ data, allEntries: true }), second = viewer({ data: [...data].reverse(), allEntries: true });
     for (const key of ['hostname', 'kind', 'summary', 'http']) {
         first.sort(key); second.sort(key); assert.deepEqual(first.visible(), ['a', 'b']); assert.deepEqual(second.visible(), ['a', 'b']);
     }
@@ -144,7 +187,7 @@ test('detail visibility uses CSS target rules independently of JavaScript with n
 test('empty crawl remains usable and reports zero matches without manufacturing entries', () => {
     const v = viewer({ data: [] });
     assert.deepEqual(v.visible(), []);
-    assert.equal(v.ui['crawl-counter'].textContent, '0 matching / 0 public entries');
+    assert.equal(v.ui['crawl-counter'].textContent, '0 likely reachable / 0 public entries');
     v.reset(); v.sort('http'); assert.equal(v.panels.length, 0);
 });
 

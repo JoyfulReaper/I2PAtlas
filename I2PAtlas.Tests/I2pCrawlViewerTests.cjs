@@ -10,14 +10,15 @@ const script = template.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 function element(id) {
     const attributes = new Map();
-    return { id, hidden: false, disabled: false, value: '', textContent: '', dataset: {}, events: {},
+    return { id, hidden: false, disabled: false, value: '', textContent: '', dataset: {}, events: {}, clicks: 0,
         setAttribute(k, v) { attributes.set(k, v); }, removeAttribute(k) { attributes.delete(k); }, getAttribute(k) { return attributes.get(k); },
-        addEventListener(k, fn) { this.events[k] = fn; }, click() { if (!this.disabled) this.events.click?.(); } };
+        addEventListener(k, fn) { this.events[k] = fn; }, click() { if (!this.disabled) { this.clicks++; this.events.click?.(); } } };
 }
 function viewer({ data, restored = {}, failSort = false, allEntries = false, javascript = true } = {}) {
     const ui = Object.fromEntries(['crawl-entries', 'crawl-controls', 'crawl-search', 'crawl-kind', 'crawl-summary', 'crawl-reset',
-        'crawl-counter', 'crawl-no-matches', 'crawl-view'].map(id => [id, element(id)]));
+        'crawl-counter', 'crawl-no-matches', 'crawl-view', 'crawl-random'].map(id => [id, element(id)]));
     ui['crawl-controls'].hidden = ui['crawl-no-matches'].hidden = true;
+    ui['crawl-random'].disabled = true;
     Object.entries(restored).forEach(([id, value]) => { ui['crawl-' + id].value = value; });
     const rows = (data ?? [
         ['a', 'plugins.i2p', 'KnownSeed', 'Zulu', 'HomepageResponseObserved', '200'],
@@ -30,6 +31,12 @@ function viewer({ data, restored = {}, failSort = false, allEntries = false, jav
         row.dataset = { entry: 'i2p-crawl-entry-' + id, hostname, kind, summary, http, search: hostname + ' ' + title };
         row.anchor = element('anchor-' + id);
         row.anchor.setAttribute('href', '#' + row.dataset.entry);
+        row.siteLink = element('site-' + id);
+        row.siteLink.setAttribute('href', 'http://' + hostname + '/');
+        row.siteLink.setAttribute('target', '_blank');
+        row.siteLink.setAttribute('rel', 'noopener noreferrer');
+        row.siteLink.setAttribute('data-crawl-open', '');
+        row.querySelector = selector => { assert.equal(selector, 'a[data-crawl-open]'); return row.siteLink; };
         return row;
     });
     const panels = rows.map(row => element(row.dataset.entry));
@@ -48,24 +55,27 @@ function viewer({ data, restored = {}, failSort = false, allEntries = false, jav
         return header;
     });
     const document = { getElementById: id => ui[id], querySelectorAll: selector => { assert.equal(selector, 'th[data-sort]'); return headers; } };
-    if (javascript) vm.runInNewContext(script, { document }); // No network, navigation or executable-data APIs are available.
+    let sample = 0;
+    const math = Object.create(Math); math.random = () => sample;
+    if (javascript) vm.runInNewContext(script, { document, Math: math }); // No network, navigation or executable-data APIs are available.
     if (allEntries && !failSort) { ui['crawl-view'].value = 'all'; ui['crawl-view'].events.change(); }
     return { ui, rows, panels, headers,
         visible: () => body.children.filter(row => !row.hidden).map(row => row.dataset.entry.slice(16)),
         filter(key, value) { ui['crawl-' + key].value = value; ui['crawl-' + key].events[key === 'search' ? 'input' : 'change'](); },
         sort(key) { headers.find(header => header.dataset.sort === key).querySelector('button').click(); },
         reset() { ui['crawl-reset'].click(); },
+        random(value) { sample = value; ui['crawl-random'].click(); },
         breakSort() { broken = true; }
     };
 }
 
-test('initial likely reachable view shows only observed homepage responses, ignoring restored filters', () => {
+test('initial Likely to respond view shows the browsing heuristic, ignoring restored filters', () => {
     const v = viewer({ restored: { view: 'all', search: 'stale', kind: 'DiscoveredHost', summary: 'RequestTimedOut' } });
     assert.deepEqual(v.visible(), ['c', 'a', 'e']); // Includes HTTP 404: this is a response observation, not a 200-only claim.
     assert.equal(v.ui['crawl-view'].value, 'likely');
     assert.equal(v.ui['crawl-controls'].hidden, false);
     for (const key of ['search', 'kind', 'summary']) assert.equal(v.ui['crawl-' + key].value, '');
-    assert.equal(v.ui['crawl-counter'].textContent, '3 likely reachable / 5 public entries');
+    assert.equal(v.ui['crawl-counter'].textContent, '3 likely to respond / 5 public entries');
     assert.equal(v.ui['crawl-no-matches'].hidden, true);
 });
 
@@ -78,20 +88,20 @@ test('hostname and title search is case-insensitive and preserves Unicode and li
     assert.equal(v.rows.find(r => r.dataset.entry.endsWith('-d')).dataset.search, 'delta.i2p <img src=x> literal');
 });
 
-test('View depends only on HomepageResponseObserved and All entries restores every other summary state', () => {
+test('View includes exactly HomepageResponseObserved and Ambiguous, and All entries restores other states', () => {
     const states = ['HomepageResponseObserved', 'HomepageAttemptFailed', 'RobotsDisallowed', 'ProxyFailureObserved',
         'RequestTimedOut', 'TransportFailure', 'RobotsRedirect', 'Ambiguous', 'HomepageResponseObserved'];
     const data = states.map((summary, i) => ['s' + i, 'host' + i + '.i2p', 'KnownSeed', '', summary, i === 0 ? '502' : i === 8 ? '404' : '']);
     const v = viewer({ data });
-    assert.deepEqual(v.visible(), ['s0', 's8']);
-    assert.equal(v.ui['crawl-counter'].textContent, '2 likely reachable / 9 public entries');
+    assert.deepEqual(v.visible(), ['s0', 's7', 's8']);
+    assert.equal(v.ui['crawl-counter'].textContent, '3 likely to respond / 9 public entries');
     v.filter('view', 'all'); assert.equal(v.visible().length, 9);
     assert.equal(v.ui['crawl-counter'].textContent, '9 matching / 9 public entries');
     v.filter('summary', 'RobotsDisallowed'); assert.deepEqual(v.visible(), ['s2']);
     v.filter('view', 'likely'); assert.deepEqual(v.visible(), []);
     assert.equal(v.ui['crawl-summary'].value, 'RobotsDisallowed', 'Summary filter must remain independent of View.');
     v.filter('view', 'all'); assert.deepEqual(v.visible(), ['s2']);
-    v.reset(); assert.deepEqual(v.visible(), ['s0', 's8']);
+    v.reset(); assert.deepEqual(v.visible(), ['s0', 's7', 's8']);
 });
 
 test('View composes with search, Kind and Summary without silently broadening an empty default', () => {
@@ -104,7 +114,7 @@ test('View composes with search, Kind and Summary without silently broadening an
     v.filter('kind', 'KnownSeed'); assert.deepEqual(v.visible(), ['b']);
     v.reset(); assert.deepEqual(v.visible(), ['c', 'a', 'e']);
     const ambiguous = viewer({ data: [['x', 'unknown.i2p', 'DiscoveredHost', '', 'Ambiguous', '']] });
-    assert.deepEqual(ambiguous.visible(), []);
+    assert.deepEqual(ambiguous.visible(), ['x']);
     assert.equal(ambiguous.ui['crawl-controls'].hidden, false);
     ambiguous.filter('view', 'all'); assert.deepEqual(ambiguous.visible(), ['x']);
 });
@@ -114,7 +124,63 @@ test('without JavaScript every static row remains available and View controls st
     assert.equal(v.visible().length, 5);
     assert.ok(v.rows.every(row => !row.hidden));
     assert.equal(v.ui['crawl-controls'].hidden, true);
+    assert.equal(v.ui['crawl-random'].disabled, true);
     assert.ok(v.rows.every(row => Object.keys(row.anchor.events).length === 0));
+});
+
+test('Random site samples each visible row uniformly and activates its safe Open link rather than a detail fragment', () => {
+    const v = viewer();
+    const eligible = v.rows.filter(row => !row.hidden);
+    assert.equal(v.ui['crawl-random'].disabled, false);
+    eligible.forEach((row, i) => {
+        v.random((i + 0.5) / eligible.length);
+        assert.equal(row.siteLink.clicks, 1);
+        assert.equal(row.siteLink.getAttribute('href'), 'http://' + row.dataset.hostname + '/');
+        assert.equal(row.siteLink.getAttribute('target'), '_blank');
+        assert.equal(row.siteLink.getAttribute('rel'), 'noopener noreferrer');
+    });
+    assert.ok(v.rows.filter(row => row.hidden).every(row => row.siteLink.clicks === 0));
+    assert.ok(v.rows.every(row => row.anchor.clicks === 0));
+    // Display sorting cannot change eligibility or the equal-sized sampling buckets.
+    for (const key of ['kind', 'summary', 'http', 'hostname']) {
+        v.sort(key);
+        const before = eligible[0].siteLink.clicks;
+        v.random(0);
+        assert.equal(eligible[0].siteLink.clicks, before + 1);
+        assert.ok(v.rows.filter(row => row.hidden).every(row => row.siteLink.clicks === 0));
+    }
+});
+
+test('Random site respects View, search, Kind and Summary, including one matching row and All entries', () => {
+    const v = viewer();
+    v.filter('kind', 'DiscoveredHost');
+    v.random(0.999999); assert.equal(v.rows[2].siteLink.clicks, 1); // One visible row.
+    v.filter('search', 'plugins');
+    assert.equal(v.ui['crawl-random'].disabled, true);
+    v.random(0); assert.equal(v.rows[2].siteLink.clicks, 1);
+    v.filter('kind', 'KnownSeed');
+    v.filter('summary', 'HomepageAttemptFailed');
+    assert.equal(v.ui['crawl-random'].disabled, true); // Excluded by default View.
+    v.filter('view', 'all');
+    assert.equal(v.ui['crawl-random'].disabled, false);
+    v.random(0); assert.equal(v.rows[1].siteLink.clicks, 1);
+    v.filter('summary', '');
+    v.random(0.999999); assert.equal(v.rows[1].siteLink.clicks, 2);
+    v.filter('view', 'likely');
+    v.random(0.999999); assert.equal(v.rows[0].siteLink.clicks, 1);
+    assert.ok(v.rows.every(row => row.anchor.clicks === 0));
+    const ambiguous = viewer({ data: [['x', 'unknown.i2p', 'DiscoveredHost', '', 'Ambiguous', '']] });
+    ambiguous.random(0); assert.equal(ambiguous.rows[0].siteLink.clicks, 1);
+});
+
+test('missing direct-link marker fails closed and disables Random site while restoring the complete directory', () => {
+    const v = viewer();
+    v.rows[0].querySelector = () => null;
+    v.random(0);
+    assert.equal(v.ui['crawl-random'].disabled, true);
+    assert.equal(v.ui['crawl-controls'].hidden, true);
+    assert.equal(v.visible().length, 5);
+    assert.ok(v.rows.every(row => row.siteLink.clicks === 0 && row.anchor.clicks === 0));
 });
 
 test('Kind filter keeps alternate known destinations distinct and supports both kinds and All', () => {
@@ -187,7 +253,9 @@ test('detail visibility uses CSS target rules independently of JavaScript with n
 test('empty crawl remains usable and reports zero matches without manufacturing entries', () => {
     const v = viewer({ data: [] });
     assert.deepEqual(v.visible(), []);
-    assert.equal(v.ui['crawl-counter'].textContent, '0 likely reachable / 0 public entries');
+    assert.equal(v.ui['crawl-counter'].textContent, '0 likely to respond / 0 public entries');
+    assert.equal(v.ui['crawl-random'].disabled, true);
+    v.random(0);
     v.reset(); v.sort('http'); assert.equal(v.panels.length, 0);
 });
 
@@ -195,6 +263,7 @@ test('initial enhancement failure restores every static entry and disables inacc
     const v = viewer({ failSort: true });
     assert.equal(v.visible().length, 5);
     assert.equal(v.ui['crawl-controls'].hidden, true);
+    assert.equal(v.ui['crawl-random'].disabled, true);
     assert.ok(v.headers.every(h => h.querySelector('button').disabled));
     assert.ok(v.panels.every(panel => !panel.hidden));
     assert.match(v.ui['crawl-counter'].textContent, /all 5 public entries remain visible/);
@@ -206,6 +275,7 @@ test('later enhancement failure removes partial filtering and leaves native deta
     v.breakSort(); v.sort('kind');
     assert.equal(v.visible().length, 5);
     assert.equal(v.ui['crawl-controls'].hidden, true);
+    assert.equal(v.ui['crawl-random'].disabled, true);
     v.filter('search', 'absent'); assert.equal(v.visible().length, 5);
     assert.ok(v.panels.every(panel => !panel.hidden));
 });

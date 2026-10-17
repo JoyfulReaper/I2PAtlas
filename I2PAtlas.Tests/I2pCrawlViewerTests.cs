@@ -47,9 +47,10 @@ public sealed class I2pCrawlViewerTests
         Assert.Contains("<noscript>", html);
         Assert.Contains("id=\"crawl-controls\" class=\"controls\" hidden", html);
         Assert.Contains("<label>View <select id=\"crawl-view\" aria-describedby=\"crawl-view-help\">", html);
-        Assert.Contains("<option value=\"likely\" selected>Likely reachable</option>", html);
+        Assert.Contains("<option value=\"likely\" selected>Likely to respond</option>", html);
         Assert.Contains("<option value=\"all\">All entries</option>", html);
-        Assert.Contains("a homepage HTTP response was observed through the proxy; it is not origin or liveness verification", html);
+        Assert.Contains("browsing heuristic based on proxy observations, not origin or liveness verification", html);
+        Assert.Contains("<button id=\"crawl-random\" type=\"button\" disabled>Random site</button>", html);
         Assert.Contains("observations through an unauthenticated proxy", html);
         Assert.Contains("not origin verification, ownership or liveness claims", html);
         await new I2pCrawlViewerGenerator().GenerateAsync(input, output);
@@ -135,7 +136,7 @@ public sealed class I2pCrawlViewerTests
             var id = I2pCrawlViewerGenerator.Id(entry);
             var row = Regex.Match(html, "<tr data-entry=\"" + id + "\"[\\s\\S]*?</tr>").Value;
             Assert.Contains($"<a href=\"#{id}\">{WebUtility.HtmlEncode(entry.Hostname)}</a>", row);
-            Assert.Contains($"<a href=\"http://{WebUtility.HtmlEncode(entry.Hostname)}/\" target=\"_blank\" rel=\"noopener noreferrer\">{WebUtility.HtmlEncode("Open ↗")}</a>", row);
+            Assert.Contains($"<a href=\"http://{WebUtility.HtmlEncode(entry.Hostname)}/\" target=\"_blank\" rel=\"noopener noreferrer\" data-crawl-open>{WebUtility.HtmlEncode("Open ↗")}</a>", row);
             Assert.HasCount(1, Regex.Matches(row, "href=\"http://"));
             Assert.DoesNotContain(" hidden", row);
             if (entry is I2pPublicCrawlEntry.KnownSeed known)

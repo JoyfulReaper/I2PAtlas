@@ -235,14 +235,16 @@ visitor's addressbook resolution; destination-derived B32 links are also
 available. Browser access needs the visitor's own I2P setup and does not inherit
 the scanner's proxy configuration.
 
-The enhanced crawl inspection viewer defaults to **Likely reachable**, meaning
-only `HomepageResponseObserved` entries: a homepage HTTP response was observed
-through the proxy, without origin/liveness verification. **All entries** restores
+The enhanced crawl inspection viewer defaults to **Likely to respond**, including
+`HomepageResponseObserved` and `Ambiguous` entries as a browsing heuristic based
+on proxy observations, without origin/liveness verification. **All entries** restores
 the complete directory, which is also available without JavaScript. It shows
 kind, hostname, depth, title, summary, homepage HTTP and referrer columns. Known
 destination B32 and exact parent identities are visible in complete detail
 sections. Optional JavaScript adds hostname/title search, Kind and Summary filters,
-four column sorts and reset. Reset restores Likely reachable and clears other
+four column sorts and reset. Random site uniformly opens an existing safe Open
+link among currently visible rows, respecting every filter; it is disabled when
+none match. Reset restores Likely to respond and clears other
 filters while retaining sorting. Filters affect only directory rows. Selecting a
 hostname reveals its public observation details through CSS fragment targeting,
 including without JavaScript; Back to directory hides the detail again. It uses no remote assets

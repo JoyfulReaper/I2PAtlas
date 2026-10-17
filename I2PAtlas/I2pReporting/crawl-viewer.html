@@ -53,16 +53,17 @@ dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 {{empty}}
 <noscript><p>Select a hostname to reveal its public observation details. Native detail links work without JavaScript.</p></noscript>
 <div id="crawl-controls" class="controls" hidden>
-<label>View <select id="crawl-view" aria-describedby="crawl-view-help"><option value="likely" selected>Likely reachable</option><option value="all">All entries</option></select></label>
+<label>View <select id="crawl-view" aria-describedby="crawl-view-help"><option value="likely" selected>Likely to respond</option><option value="all">All entries</option></select></label>
 <label>Hostname or title <input id="crawl-search" type="search" autocomplete="off"></label>
 <label>Kind <select id="crawl-kind"><option value="">All</option><option value="KnownSeed">Known seed</option><option value="DiscoveredHost">Discovered host</option></select></label>
 <label>Summary state <select id="crawl-summary"><option value="">All</option>{{states}}</select></label>
 <button id="crawl-reset" type="button">Reset filters</button>
+<button id="crawl-random" type="button" disabled>Random site</button>
 </div>
-<p id="crawl-view-help">Likely reachable means a homepage HTTP response was observed through the proxy; it is not origin or liveness verification. Without JavaScript, all entries are shown.</p>
+<p id="crawl-view-help">Likely to respond includes Homepage response observed and Ambiguous results as a browsing heuristic based on proxy observations, not origin or liveness verification. Without JavaScript, all entries are shown.</p>
 <p id="crawl-counter" aria-live="polite">All public entries are listed.</p>
 <p>Select a hostname to reveal its public observation details. Filters affect the directory only. Select a column heading to sort.</p>
-<p id="crawl-no-matches" hidden>No matching entries. Choose All entries to include other observations, or reset filters to restore Likely reachable.</p>
+<p id="crawl-no-matches" hidden>No matching entries. Choose All entries to include other observations, or reset filters to restore Likely to respond.</p>
 <div class="table-scroll">
 <table>
 <caption>Known destination-bound seeds and host-only discovered observations</caption>
@@ -87,6 +88,7 @@ dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
     const body = byId('crawl-entries'), controls = byId('crawl-controls');
     const search = byId('crawl-search'), kind = byId('crawl-kind'), summary = byId('crawl-summary');
     const view = byId('crawl-view');
+    const random = byId('crawl-random');
     const counter = byId('crawl-counter'), empty = byId('crawl-no-matches');
     const rows = Array.from(body.querySelectorAll('tr[data-entry]'));
     const headers = Array.from(document.querySelectorAll('th[data-sort]'));
@@ -106,6 +108,7 @@ dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
     }
     function fallback() {
         failed = true;
+        random.disabled = true;
         rows.forEach(row => { row.hidden = false; });
         headers.forEach(header => { header.removeAttribute('aria-sort'); header.querySelector('button').disabled = true; });
         controls.hidden = true;
@@ -118,15 +121,16 @@ dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
             const query = search.value.trim().toLowerCase();
             let count = 0;
             rows.forEach(row => {
-                row.hidden = !((view.value === 'all' || row.dataset.summary === 'HomepageResponseObserved')
+                row.hidden = !((view.value === 'all' || row.dataset.summary === 'HomepageResponseObserved' || row.dataset.summary === 'Ambiguous')
                     && row.dataset.search.toLowerCase().includes(query) && (!kind.value || row.dataset.kind === kind.value)
                     && (!summary.value || row.dataset.summary === summary.value));
                 if (!row.hidden) count++;
             });
             [...rows].sort(compare).forEach(row => body.appendChild(row));
             headers.forEach(header => header.setAttribute('aria-sort', header.dataset.sort === key ? (direction === 1 ? 'ascending' : 'descending') : 'none'));
-            counter.textContent = count + (view.value === 'all' ? ' matching / ' : ' likely reachable / ') + rows.length + ' public entries';
+            counter.textContent = count + (view.value === 'all' ? ' matching / ' : ' likely to respond / ') + rows.length + ' public entries';
             empty.hidden = count !== 0;
+            random.disabled = count === 0;
         } catch (_) { fallback(); }
     }
     try {
@@ -136,6 +140,16 @@ dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
         kind.addEventListener('change', refresh);
         summary.addEventListener('change', refresh);
         byId('crawl-reset').addEventListener('click', () => { view.value = 'likely'; search.value = ''; kind.value = ''; summary.value = ''; refresh(); });
+        random.addEventListener('click', () => {
+            if (failed || random.disabled) return;
+            try {
+                const visible = rows.filter(row => !row.hidden);
+                if (visible.length === 0) { random.disabled = true; return; }
+                const link = visible[Math.floor(Math.random() * visible.length)].querySelector('a[data-crawl-open]');
+                if (!link) throw new Error('Missing direct site action.');
+                link.click();
+            } catch (_) { fallback(); }
+        });
         headers.forEach(header => {
             const button = header.querySelector('button');
             button.disabled = false;

@@ -363,17 +363,21 @@ DiscoveredHost\n<hostname>\n<referrerHostname>\n<referrerDestinationHostname>
 Observations, times and array position do not affect IDs. Native detail and parent
 anchors work with JavaScript disabled. Enhancement only searches hostname/title,
 filters View/Kind/Summary and sorts directory rows by hostname, kind, summary or numeric
-homepage HTTP. View defaults to Likely reachable: exactly `HomepageResponseObserved`,
-an unauthenticated proxy observation of a homepage HTTP response, not origin/liveness
+homepage HTTP. View defaults to Likely to respond: exactly `HomepageResponseObserved`
+or `Ambiguous`, a browsing heuristic based on proxy observations, not origin/liveness
 verification. All entries restores the directory, subject to independent search,
-Kind and Summary filters. Reset restores Likely reachable, clears other filters
+Kind and Summary filters. Reset restores Likely to respond, clears other filters
 and retains sorting; missing HTTP statuses sort last in either direction. Without
 JavaScript or on enhancement failure, all directory rows remain available. Detail
 articles remain in the HTML but are hidden until selected by CSS `:target`, with
 no JavaScript requirement. Back to directory hides the selected article. Filters
 never control detail visibility, so filtered rows cannot make deep links inaccessible.
-There is no History API, random selection, clipboard feature or extra keyboard
-navigation. An enhancement failure restores all directory rows and disables controls.
+Random site uniformly selects a currently visible row and invokes its existing
+safe `a[data-crawl-open]` link, without constructing a URL or changing the detail
+fragment. All filters affect eligibility; sorting does not. Empty results disable
+Random site; it stays disabled/hidden without JavaScript or on enhancement failure.
+There is no History API, clipboard feature or extra keyboard navigation. An
+enhancement failure restores all directory rows and disables controls.
 
 Every public string is HTML-encoded again. Links validate canonical `.i2p` syntax
 and use only explicit HTTP root anchors with `_blank`/`noopener noreferrer`.

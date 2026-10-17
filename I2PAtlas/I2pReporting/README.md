@@ -151,22 +151,31 @@ Details are hidden by default; selecting a hostname reveals only its fragment's
 CSS `:target` article, without JavaScript. Back to directory targets `#directory`
 and hides the selected detail. The detail container has no empty visible heading.
 
-The enhanced View defaults to Likely reachable, exactly the entries whose public
-SummaryState is `HomepageResponseObserved`. It means a homepage HTTP response was
-observed through the proxy, not origin/liveness verification; no other summary
-state implies this view membership. All entries restores the full directory.
+The enhanced View defaults to Likely to respond, exactly the entries whose public
+SummaryState is `HomepageResponseObserved` or `Ambiguous`. This is a browsing
+heuristic based on proxy observations, not origin/liveness verification. Ambiguous
+results are included without claiming an origin response. Failure, timeout,
+disallow and redirect summary states are excluded. All entries restores the full directory.
 The View combines with the independent Summary, Kind and search filters; choosing
 All entries does not clear those filters. Restored filter values are cleared at
 initialization. Enhancement adds case-insensitive hostname/title search, All/Known/Discovered Kind
 filter, Summary filter, four column sorts and reset. Sorts toggle direction with
 aria-sort; numeric Homepage HTTP places missing observations last in both
 directions, with hostname and stable ID as deterministic tie-breakers. Reset restores
-Likely reachable and clears other filters while retaining sorting. The counter
-labels matching entries as likely reachable when that View is selected. Without
+Likely to respond and clears other filters while retaining sorting. The counter
+labels matching entries as likely to respond when that View is selected. Without
 JavaScript all directory rows remain available. Filtering affects directory rows only; native
 fragment targeting controls detail visibility independently. Enhancement failure
-reveals all rows and disables controls. No History API navigation, random entry,
-clipboard feature or elaborate keyboard navigation is added.
+reveals all rows and disables controls. No History API navigation, clipboard
+feature or elaborate keyboard navigation is added.
+
+Random site chooses uniformly among the rows currently visible after View,
+search, Kind and Summary filtering. It invokes the selected row's marked safe
+Open link (`a[data-crawl-open]`), with its existing root URL, `_blank` and
+`noopener noreferrer`, rather than constructing URLs or visiting detail fragments.
+Sorting changes display order, not eligibility. No matches disables the button;
+with one match it opens that entry. The button is disabled in static HTML and
+hidden with the other controls without JavaScript or after enhancement failure.
 
 Every public string is HTML-encoded again, including attributes, titles and link
 labels. Even an internal caller bypassing the reader cannot turn unsafe hostname

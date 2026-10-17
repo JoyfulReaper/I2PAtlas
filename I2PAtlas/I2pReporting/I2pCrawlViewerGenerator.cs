@@ -97,7 +97,7 @@ public sealed class I2pCrawlViewerGenerator
             Add("rows", $"""
                 <tr data-entry="{id}" data-hostname="{E(entry.Hostname)}" data-kind="{E(entry.Kind.ToString())}" data-summary="{E(e.SummaryState.ToString())}" data-http="{Number(e.HomepageStatusCode)}" data-search="{E(entry.Hostname + " " + (e.Title ?? ""))}">
                 <td headers="column-kind"><span class="badge">{E(kind)}</span></td>
-                <th scope="row" headers="column-hostname"><a href="#{id}">{E(entry.Hostname)}</a> · {Link(entry.Hostname, "Open ↗")}</th>
+                <th scope="row" headers="column-hostname"><a href="#{id}">{E(entry.Hostname)}</a> · {Link(entry.Hostname, "Open ↗", directoryAction: true)}</th>
                 <td headers="column-depth">{entry.Depth}</td><td headers="column-title">{E(title)}</td>
                 <td headers="column-summary">{E(state)}</td><td headers="column-http">{E(Number(e.HomepageStatusCode) is { Length: > 0 } http ? http : "Not observed")}</td>
                 <td headers="column-referrer">{referrer}</td></tr>
@@ -170,12 +170,12 @@ public sealed class I2pCrawlViewerGenerator
         };
         return "i2p-crawl-entry-" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)));
     }
-    private static string Link(string host, string label)
+    private static string Link(string host, string label, bool directoryAction = false)
     {
         try
         {
             if (I2pSeed.NormalizeHostname(host) == host)
-                return $"<a href=\"http://{E(host)}/\" target=\"_blank\" rel=\"noopener noreferrer\">{E(label)}</a>";
+                return $"<a href=\"http://{E(host)}/\" target=\"_blank\" rel=\"noopener noreferrer\"{(directoryAction ? " data-crawl-open" : "")}>{E(label)}</a>";
         }
         catch (Exception ex) when (ex is ArgumentException or FormatException) { }
         return E(label);

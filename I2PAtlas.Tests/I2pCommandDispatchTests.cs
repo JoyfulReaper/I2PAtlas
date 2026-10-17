@@ -19,7 +19,7 @@ public sealed class I2pCommandDispatchTests
         Assert.IsTrue(result.Output.StartsWith("Usage: i2patlas [command]", StringComparison.Ordinal));
         var listed = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Skip(1).SkipLast(1)
             .Select(line => line.Trim().Split(' ')[0]).ToArray();
-        CollectionAssert.AreEquivalent(new[] { "import-seeds", "i2p-probe-test", "i2p-scan", "i2p-crawl", "i2p-project", "i2p-view" }, listed);
+        CollectionAssert.AreEquivalent(new[] { "import-seeds", "i2p-probe-test", "i2p-scan", "i2p-crawl", "i2p-project", "i2p-crawl-project", "i2p-view" }, listed);
     }
 
     [TestMethod]
@@ -44,6 +44,7 @@ public sealed class I2pCommandDispatchTests
     [DataRow("i2p-probe-test")]
     [DataRow("i2p-scan")]
     [DataRow("i2p-crawl")]
+    [DataRow("i2p-crawl-project")]
     [DataRow("i2p-project")]
     [DataRow("i2p-view")]
     public async Task EveryI2pCommandDispatchesToItsOwnArgumentValidation(string command)

@@ -1,16 +1,12 @@
 using System.Collections.Immutable;
-using System.Globalization;
-using System.Net.Http.Headers;
-using System.Text;
-using I2PAtlas.AddressBook;
-using I2PAtlas.I2pProbing;
 using I2PAtlas.I2pScanning;
+using static I2PAtlas.I2pPublishing.I2pPublicProjectionPolicy;
 
 namespace I2PAtlas.I2pPublishing;
 
 internal static class I2pPublicProjector
 {
-    internal const int MaxTitleCharacters = 160;
+    internal const int MaxTitleCharacters = I2pPublicProjectionPolicy.MaxTitleCharacters;
 
     // Called only after strict raw validation. No raw object or dictionary enters the public graph.
     internal static I2pPublicScan Project(I2pRawScanArtifact raw, CancellationToken token)
@@ -24,10 +20,10 @@ internal static class I2pPublicProjector
             token.ThrowIfCancellationRequested();
             if (!identities.Add((result.Hostname, result.DestinationHostname)))
                 throw new InvalidDataException("Duplicate public seed identity; scanned observations cannot be merged.");
-            var links = (result.HomepageMetadata?.Links ?? []).Where(link => link.Kind == I2pDiscoveredLinkKind.I2p)
-                .Select(link => I2pSeed.NormalizeHostname(new Uri(link.Url, UriKind.Absolute).Host))
-                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToImmutableArray();
-            entries.Add(new(result.Hostname, result.DestinationHostname, counts[result.Hostname], Summary(result),
+            var links = DiscoveredHostnames(result.HomepageMetadata);
+            entries.Add(new(result.Hostname, result.DestinationHostname, counts[result.Hostname],
+                Summary(result.RobotsRequestOutcome, result.RobotsProxyClassification, result.RobotsObservation,
+                    result.HomepageRequestAttempted, result.HomepageResponse?.StatusCode),
                 result.RobotsRequestOutcome, result.RobotsProxyClassification, result.RobotsObservation, result.RobotsResponse?.StatusCode,
                 result.HomepageRequestAttempted, result.HomepageRequestOutcome, result.HomepageProxyClassification,
                 result.HomepageResponse?.StatusCode, MediaType(result.HomepageResponse?.ContentType), Title(result.HomepageMetadata?.Title),
@@ -38,36 +34,4 @@ internal static class I2pPublicProjector
             .ThenBy(e => e.DestinationHostname, StringComparer.Ordinal).ToImmutableArray());
     }
 
-    private static I2pPublicSummaryState Summary(I2pRawSeedResult result)
-    {
-        if (result.HomepageResponse != null) return I2pPublicSummaryState.HomepageResponseObserved;
-        if (result.HomepageRequestAttempted == true) return I2pPublicSummaryState.HomepageAttemptFailed;
-        if (result.RobotsObservation == I2pRobotsObservation.DisallowsRoot) return I2pPublicSummaryState.RobotsDisallowed;
-        if (result.RobotsProxyClassification == I2pProxyResponseClassification.LikelyProxyFailure) return I2pPublicSummaryState.ProxyFailureObserved;
-        if (result.RobotsRequestOutcome == I2pRequestOutcome.TimedOut) return I2pPublicSummaryState.RequestTimedOut;
-        if (result.RobotsRequestOutcome is I2pRequestOutcome.TransportFailure or I2pRequestOutcome.ProxyUnavailable)
-            return I2pPublicSummaryState.TransportFailure;
-        if (result.RobotsObservation == I2pRobotsObservation.Redirect) return I2pPublicSummaryState.RobotsRedirect;
-        return I2pPublicSummaryState.Ambiguous;
-    }
-
-    private static string? MediaType(string? text) => MediaTypeHeaderValue.TryParse(text, out var type) &&
-        type.MediaType is { Length: > 0 and <= 80 } media && media.Contains('/') &&
-        media.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '-' or '.' or '+') ? media.ToLowerInvariant() : null;
-
-    // Text only. The HTML viewer escapes this value again for its output context.
-    private static string? Title(string? text)
-    {
-        if (text == null) return null;
-        var title = new StringBuilder();
-        foreach (var rune in text.EnumerateRunes())
-        {
-            if (Rune.GetUnicodeCategory(rune) is UnicodeCategory.Control or UnicodeCategory.Format or
-                UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator) continue;
-            if (title.Length + rune.Utf16SequenceLength > MaxTitleCharacters) break;
-            title.Append(rune.ToString());
-        }
-        var result = title.ToString().Trim();
-        return result.Length == 0 ? null : result;
-    }
 }

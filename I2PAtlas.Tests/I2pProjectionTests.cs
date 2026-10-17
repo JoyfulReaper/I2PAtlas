@@ -19,6 +19,14 @@ namespace I2PAtlas.Tests;
 [TestClass]
 public sealed class I2pProjectionTests
 {
+    [TestMethod]
+    public void PublicScanV1SerializedBytesRemainUnchanged()
+    {
+        var json = JsonSerializer.Serialize(I2pPublicProjector.Project(Artifact(), default), I2pProjectionService.JsonOptions);
+        Assert.AreEqual("639EFE86210E0956B5870BF51298AB8F252D30EB867480DEF7BD3ABB3E7FA79C",
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(json))));
+    }
+
     private static readonly DateTimeOffset Started = DateTimeOffset.Parse("2026-10-16T00:00:00+00:00");
     private const string RedirectSentinel = "http://redirect-secret.i2p/private-redirect?secret=REDIRECT_PRIVATE";
     private const string ErrorSentinel = "PRIVATE_ERROR_DETAIL_SENTINEL";

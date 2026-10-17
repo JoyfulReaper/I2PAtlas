@@ -7,7 +7,7 @@ if (command is "--help" or "-h" or "help")
     return 0;
 }
 
-if (command is not ("import-seeds" or "i2p-probe-test" or "i2p-scan" or "i2p-crawl" or "i2p-project" or "i2p-view"))
+if (command is not ("import-seeds" or "i2p-probe-test" or "i2p-scan" or "i2p-crawl" or "i2p-project" or "i2p-crawl-project" or "i2p-view"))
 {
     CommandUsage.Print();
     return 2;
@@ -39,6 +39,15 @@ try
         ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
         Console.CancelKeyPress += cancel;
         try { return await I2pProjectCommand.ExecuteAsync(args, cancellationToken: cancellation.Token); }
+        finally { Console.CancelKeyPress -= cancel; }
+    }
+
+    if (command == "i2p-crawl-project")
+    {
+        using var cancellation = new CancellationTokenSource();
+        ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
+        Console.CancelKeyPress += cancel;
+        try { return await I2pCrawlProjectCommand.ExecuteAsync(args, cancellationToken: cancellation.Token); }
         finally { Console.CancelKeyPress -= cancel; }
     }
 

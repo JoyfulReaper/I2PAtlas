@@ -155,3 +155,119 @@ owned staging files. Filesystem aliases not represented as reparse points (for
 example hard links) and simultaneous writers are outside these path checks;
 replacement itself does not truncate the old file. A crash can leave a staging
 file; replacement is not a multi-file or power-loss durability guarantee.
+
+## Public crawl v1
+
+The separate local crawl boundary is:
+
+```text
+private i2patlas.raw-crawl v1
+    -> i2p-crawl-project
+    -> public i2patlas.public-crawl v1
+
+dotnet run --project I2PAtlas -- i2p-crawl-project private/results/i2p-crawl.json published/i2p-crawl.json
+```
+
+`I2pCrawlProjectionService` uses only the existing strict `I2pRawCrawlReader` for
+input. It does not reopen the snapshot/addressbook, construct a transport, resolve
+DNS or make requests. The existing raw-crawl/raw-scan/public-scan schemas and
+scan/viewer pipeline are unchanged. Crawl viewer/HTML support is left for
+Crawler 2b: `i2p-view` accepts only public-scan v1, and `i2p-project` accepts only
+raw-scan v1. Neither command accepts either crawl schema.
+
+The new immutable `I2pPublicCrawl` has exactly these top-level fields:
+
+```text
+schema: "i2patlas.public-crawl"
+version: 1
+crawlStartedAtUtc: explicit UTC timestamp
+crawlCompletedAtUtc: explicit UTC timestamp, >= start
+knownSeedCount: 0..10000
+discoveredHostCount: 0..1000
+entries: at most 11000 entries, counts must match their kinds
+```
+
+Entries use a closed hierarchy with exact kind-specific property sets:
+
+```text
+KnownSeed:
+    kind: "KnownSeed"
+    hostname: normalized .i2p name
+    destinationHostname: canonical 52-character hash label + ".b32.i2p"
+    depth: 0
+    observation: public observation object below
+
+DiscoveredHost:
+    kind: "DiscoveredHost"
+    hostname: literal normalized discovered .i2p name
+    hostForm: "Friendly" or "ClassicBase32"
+    depth: 1
+    referrerHostname: known parent hostname
+    referrerDestinationHostname: known parent's destination-derived B32
+    observation: public observation object below
+```
+
+The referrer pair must identify exactly one KnownSeed entry. Its B32 distinguishes
+alternate destinations for one friendly name. It never identifies the child.
+Friendly discovered entries have no destinationHostname; classic B32 references
+retain their literal hostname and also have no separate destination field.
+Discovered names use the existing host-only target validator, including control
+hostname exclusions and canonical classic B32 checks. Known semantic identities
+remain hostname+B32. Known entries come first, ordered ordinally by hostname then
+B32; discovered entries follow in unique hostname order. Alternate known
+destinations survive without a preferred mapping. Discovered identities cannot
+duplicate selected known friendly/B32 names.
+
+Both entry kinds share exactly this separate public observation object:
+
+```text
+summaryState: existing I2pPublicSummaryState name
+robotsRequestOutcome: existing I2pRequestOutcome name or null
+robotsProxyClassification: existing I2pProxyResponseClassification name
+robotsObservation: existing I2pRobotsObservation name
+robotsStatusCode: integer 100..999 or null
+homepageRequestAttempted: boolean or null for unknown partial state
+homepageRequestOutcome: existing I2pRequestOutcome name or null
+homepageProxyClassification: existing I2pProxyResponseClassification name or null
+homepageStatusCode: integer 100..999 or null
+homepageContentType: sanitized lowercase media type, at most 80 characters, or null
+title: sanitized plain text, at most 160 UTF-16 characters, or null
+discoveredI2pHostnames: at most 250 sorted unique normalized .i2p hostnames
+linkExtractionIncomplete: boolean
+```
+
+`I2pPublicProjectionPolicy` shares the existing scan summary precedence,
+title/media-type sanitation and safe hostname-only metadata projection. These
+observations never claim origin authentication, liveness or ownership. A public
+hostname list is retained evidence, not work or a destination-resolution claim.
+
+Everything else stays private: Base64 destinations, snapshot/source paths,
+hashes/byte lengths/import time, proxy identity, settings, private errors,
+individual request timestamps/durations, raw metrics, full discovered URLs,
+redirect locations, clearnet links, headers and raw objects. Only the crawl-level
+UTC interval is exposed; no request timings are copied. Plain titles may contain
+literal markup, which any future HTML renderer must escape again.
+
+`I2pPublicCrawlReader` enforces strict UTF-8 without BOM, JSON depth <=8 and a
+128 MiB byte limit before and during reading. Every object requires its exact
+property set, including explicit nullable fields. Unknown/duplicate/missing
+properties, malformed enum names/types, non-normalized hostnames, invalid B32,
+wrong kind/depth/form/referrer combinations, duplicate/unordered identities,
+invalid counts/timestamps/metadata and inconsistent observations are rejected.
+HTTP outcomes must match statuses, classifications must match their recorded
+status/robots role, and homepage attempts require the recorded robots gate.
+Unknown state stays null; no input is repaired, sorted or canonicalized.
+Structural validation cannot establish proxy response authenticity.
+
+Both paths must be explicit local files and differ. The output directory must
+exist; URL, UNC/device paths and filesystem reparse points/ancestors reject using
+the existing projection policy. A unique private `.i2p-public-crawl-*.tmp` is
+created beside the output. Serialization caps at 128 MiB, followed by async flush,
+disk flush and close. The new strict public reader validates the staged bytes
+before cancellation is checked and replacement occurs. Failure before replacement
+preserves previous output and cleans the owned temporary file. The existing
+hard-link/concurrent-writer/crash limitations above also apply.
+
+Exit codes: 0 installed, 2 bad arguments/paths, 1 invalid raw/public artifact,
+resource or I/O failure, 130 cancellation. Ctrl+C requests cancellation.
+Diagnostics expose bounded counts and generic errors, not paths or private values.

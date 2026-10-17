@@ -2,8 +2,9 @@
 
 `i2p-crawl` runs a private, bounded depth-0 seed wave followed by a terminal depth-1
 host-only wave. The existing Crawler 1a selector remains a pure offline component.
-There is no public crawl projection or viewer. `i2p-project` and `i2p-view` reject
-raw-crawl input. Nothing below authenticates response origin.
+The separate local `i2p-crawl-project` command now projects validated raw-crawl
+into public-crawl v1. There is no crawl viewer. Existing `i2p-project` and
+`i2p-view` reject crawl input. Nothing below authenticates response origin.
 
 ```text
 dotnet run --project I2PAtlas -- i2p-crawl <snapshot-file> <private-output-file> <proxy-uri> [--concurrency <1-4>] [--timeout-ms <1-60000>] [--max-seeds <1-10000>] [--max-discovered-hosts <0-1000>]
@@ -78,6 +79,30 @@ waves, homepage attempts/responses, unexpected failures and maximum active probe
 The **entire artifact is private**, including destinations, identities, URLs,
 errors, proxy settings, timings and hashes. Existing scan/public schemas and
 their projection/viewer contracts are unchanged.
+
+## Local public projection
+
+```text
+private i2patlas.raw-crawl v1
+    -> i2p-crawl-project <private-raw-crawl-file> <public-output-file>
+    -> public i2patlas.public-crawl v1
+```
+
+This boundary performs no networking or further crawling. It validates with the
+existing strict raw reader, then copies an explicit public allowlist into a
+separate immutable model. Known seeds expose hostname+B32; discovered hosts expose
+only their literal normalized hostname/form and parent hostname+B32 pair. The
+parent B32 is necessary to distinguish alternate known destinations, and is never
+an inferred identity for the child. Public observations remain unauthenticated.
+
+Public data includes crawl-level UTC times, counts, observation enums/statuses,
+bounded sanitized titles/media types and sorted I2P hostname lists. It excludes
+destinations, snapshot/source provenance, proxy identity, settings, private errors,
+durations, raw metrics, redirects and full URLs. The strict public reader and
+staged writer enforce the public schema before replacement. See
+[publishing](../I2pPublishing/README.md#public-crawl-v1) for exact fields and limits.
+Viewer/HTML integration remains for Crawler 2b; existing scan projection/viewer
+commands do not accept raw-crawl or public-crawl data.
 
 ## Bounds and strict installation
 

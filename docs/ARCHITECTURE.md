@@ -1,7 +1,7 @@
 # I2PAtlas architecture
 
-I2PAtlas has six explicit CLI commands: a snapshot-to-viewer pipeline and a
-separate private one-hop crawl path. There is no hosted service or deployment layer.
+I2PAtlas has seven explicit CLI commands: a snapshot-to-viewer pipeline and a
+separate one-hop crawl/public-projection path. There is no hosted service or deployment layer.
 
 ```text
 local effective addressbook export
@@ -32,7 +32,8 @@ i2p-probe-test: strict seed loading -> one uniquely selected friendly name
 i2p-crawl: strict seed loading -> selected known-seed probe wave
             -> pure bounded frontier selection using full snapshot suppression
             -> terminal host-only probe wave -> private i2patlas.raw-crawl v1
-            (no public projection/viewer)
+            -> i2p-crawl-project -> public i2patlas.public-crawl v1
+            (no crawl viewer/HTML integration yet)
 ```
 
 ## Trust boundaries
@@ -48,8 +49,8 @@ robots response authenticates the response author. `I2pOriginEvidence` stays
 `I2pProxyResponseClassification` is a separate heuristic.
 
 Seed snapshots and raw scan/crawl artifacts are private operational data. The explicit
-scan projection is the only path from private evidence into public JSON. The
-viewer accepts only the public model and encodes text again for HTML.
+scan and crawl projections are explicit allowlist boundaries into their respective
+public schemas. The existing viewer accepts only public-scan and encodes text again for HTML.
 No artifact's existence asserts origin authenticity.
 
 ## Addressbook import and seed identity
@@ -265,8 +266,28 @@ the wave barrier without reopening source files or claiming origin proof.
 The private writer flushes and closes a bounded staged file, strictly validates
 its bytes, then checks cancellation and replaces the output. No partial final
 artifact is installed. Existing raw-scan/public-scan schemas stay unchanged;
-`i2p-project` and `i2p-view` reject raw-crawl artifacts. There is no public crawl
-projection or viewer yet.
+`i2p-project` and `i2p-view` reject crawl artifacts. Crawl viewer support is not implemented yet.
+
+`i2p-crawl-project` is a separate purely local path through the unchanged strict
+`I2pRawCrawlReader`, `I2pPublicCrawlProjector` and staged `I2pCrawlProjectionService`.
+`i2patlas.public-crawl` v1 contains crawl UTC start/completion, known/discovered
+counts and one entries array with closed `KnownSeed` and `DiscoveredHost` shapes.
+Known entries expose hostname+derived B32, depth 0 and public observations.
+Discovered entries expose hostname, public HostForm, depth 1, parent hostname+B32
+and public observations; they never acquire a destination identity. Parent B32
+keeps alternate destinations unambiguous. Known entries sort hostname then B32;
+discovered entries follow in hostname order, all ordinal.
+
+The allowlist excludes operational provenance, Base64 destinations, proxy/settings,
+raw metrics, errors, individual timings, redirects and full URLs. Only sanitized
+titles/media types and normalized I2P hostnames survive metadata projection.
+Scan and crawl share small neutral policy helpers without changing public-scan
+serialized output. `I2pPublicCrawlReader` requires exact fields, named enums,
+canonical identities/order, valid kind-specific shapes/depths/referrers, matching
+counts, UTC times, consistent observations/gates and public metadata bounds.
+The 128 MiB staged public file is flushed, closed and strictly read before final
+replacement. Failure or cancellation before replacement preserves previous output.
+This creates local JSON only; no viewer, deployment or network access is involved.
 
 ## Strict raw reader and public projection
 
@@ -343,7 +364,7 @@ multi-file transaction, checkpoint system or cross-process lock. Strict path
 checks do not detect every hard-link alias or coordinate simultaneous writers.
 
 The scan cancels in-flight requests and stops workers on caller cancellation.
-`Program.cs` installs Ctrl+C handlers for scan, crawl, projection and viewer commands;
+`Program.cs` installs Ctrl+C handlers for scan, crawl, both projection and viewer commands;
 they return 130 when cancellation is handled. Import/probe APIs accept cancellation
 tokens, but their CLI dispatch has no equivalent graceful Ctrl+C handler.
 
@@ -363,5 +384,5 @@ replacement failures, projection privacy and viewer generation. Node tests cover
 the viewer's HTTP-200 default, filtering, sorting, navigation and stable identities.
 No automated test requires a real I2P router.
 
-Crawling beyond depth 1 and public crawl projection/viewer integration remain
+Crawling beyond depth 1 and crawl viewer/HTML integration remain
 future work. There is no scheduler or deployment package.

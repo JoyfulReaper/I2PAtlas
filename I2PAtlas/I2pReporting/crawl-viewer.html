@@ -30,8 +30,9 @@ thead button { background: transparent; color: inherit; border: 1px solid #9eaec
 th[aria-sort="ascending"] button::after { content: ' ↑'; }
 th[aria-sort="descending"] button::after { content: ' ↓'; }
 .badge { display: inline-block; padding: .1rem .4rem; border: 1px solid #8c9db5; border-radius: .3rem; white-space: nowrap; }
-.crawl-detail { margin: 1rem 0; scroll-margin-top: 1rem; }
-.crawl-detail:target { outline: 3px solid #b36300; }
+.crawl-details { margin: 0; }
+.crawl-detail { display: none; margin: 1rem 0; scroll-margin-top: 1rem; }
+.crawl-detail:target { display: block; outline: 3px solid #b36300; }
 dl { display: grid; grid-template-columns: minmax(10rem, 19rem) minmax(0, 1fr); gap: .4rem 1rem; }
 dt { font-weight: 600; }
 dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -50,7 +51,7 @@ dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 <section id="directory" aria-labelledby="directory-title">
 <h2 id="directory-title">Public crawl directory</h2>
 {{empty}}
-<noscript><p>All entries and details are available below. Native detail links work without JavaScript.</p></noscript>
+<noscript><p>Select a hostname to reveal its public observation details. Native detail links work without JavaScript.</p></noscript>
 <div id="crawl-controls" class="controls" hidden>
 <label>Hostname or title <input id="crawl-search" type="search" autocomplete="off"></label>
 <label>Kind <select id="crawl-kind"><option value="">All</option><option value="KnownSeed">Known seed</option><option value="DiscoveredHost">Discovered host</option></select></label>
@@ -58,7 +59,7 @@ dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 <button id="crawl-reset" type="button">Reset filters</button>
 </div>
 <p id="crawl-counter" aria-live="polite">All public entries are listed.</p>
-<p>Filters affect the directory only; all detail sections remain below and native detail links always work. Select a column heading to sort.</p>
+<p>Select a hostname to reveal its public observation details. Filters affect the directory only. Select a column heading to sort.</p>
 <p id="crawl-no-matches" hidden>No matching entries. Reset filters to show all entries.</p>
 <div class="table-scroll">
 <table>
@@ -75,7 +76,7 @@ dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 </table>
 </div>
 </section>
-<section aria-labelledby="details-title"><h2 id="details-title">Complete public observations</h2>{{details}}</section>
+<section class="crawl-details" aria-label="Complete public observations">{{details}}</section>
 </main>
 <script>
 (() => {

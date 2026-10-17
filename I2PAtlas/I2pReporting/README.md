@@ -146,16 +146,18 @@ DiscoveredHost\n<hostname>\n<referrerHostname>\n<referrerDestinationHostname>
 
 Array position, crawl times, title, status and other observations do not affect
 IDs. Each detail links back to the directory; discovered entries link to their
-exact known parent's detail. All rows/details are statically rendered and native
-anchors work without JavaScript. The static report does not hide detail sections.
+exact known parent's detail. All rows/details remain in the standalone HTML.
+Details are hidden by default; selecting a hostname reveals only its fragment's
+CSS `:target` article, without JavaScript. Back to directory targets `#directory`
+and hides the selected detail. The detail container has no empty visible heading.
 
-The modest enhancement starts with every entry visible, clears restored filter
+The modest enhancement starts with every directory entry visible, clears restored filter
 values, and adds case-insensitive hostname/title search, All/Known/Discovered Kind
 filter, Summary filter, four column sorts and reset. Sorts toggle direction with
 aria-sort; numeric Homepage HTTP places missing observations last in both
 directions, with hostname and stable ID as deterministic tie-breakers. Reset clears
-filters while retaining sorting. Filtering affects directory rows only; details
-remain visible so every native deep link stays accessible. Enhancement failure
+filters while retaining sorting. Filtering affects directory rows only; native
+fragment targeting controls detail visibility independently. Enhancement failure
 reveals all rows and disables controls. No History API navigation, random entry,
 clipboard feature or elaborate keyboard navigation is added.
 

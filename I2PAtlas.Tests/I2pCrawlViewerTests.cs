@@ -42,6 +42,7 @@ public sealed class I2pCrawlViewerTests
                 "Discovered I2P hostnames", "Extraction incomplete" }) Assert.Contains(label, detail);
             Assert.Contains("href=\"#" + I2pCrawlViewerGenerator.Id(entry) + "\"", html);
         }
+        // Rows stay visible; detail visibility uses CSS :target rather than a permanent hidden attribute.
         foreach (Match tag in Regex.Matches(html, "<(?:tr data-entry=|article class=\"crawl-detail\")[^>]*>")) Assert.DoesNotContain(" hidden", tag.Value);
         Assert.Contains("<noscript>", html);
         Assert.Contains("id=\"crawl-controls\" class=\"controls\" hidden", html);
@@ -52,6 +53,34 @@ public sealed class I2pCrawlViewerTests
         CollectionAssert.AreEqual(original, await File.ReadAllBytesAsync(input));
         Assert.IsEmpty(network.Activity);
         Assert.IsEmpty(Directory.GetFiles(files.DirectoryPath, ".i2p-crawl-view-*.tmp"));
+    }
+
+    [TestMethod]
+    public void DetailsAreCollapsedByCssAndOnlyNativeFragmentTargetsRevealThemWithoutJavaScript()
+    {
+        var crawl = Fixture();
+        var html = I2pCrawlViewerGenerator.GenerateHtml(crawl);
+        var withoutScript = Regex.Replace(html, "<script>[\\s\\S]*?</script>", "");
+        var css = Regex.Match(withoutScript, "<style>([\\s\\S]*?)</style>").Groups[1].Value;
+        var defaultRule = Regex.Match(css, @"\.crawl-detail\s*\{([^}]*)\}").Groups[1].Value;
+        var targetRule = Regex.Match(css, @"\.crawl-detail:target\s*\{([^}]*)\}").Groups[1].Value;
+        Assert.IsTrue(Regex.IsMatch(defaultRule, @"\bdisplay:\s*none\s*;"), "All non-targeted details must be collapsed by CSS alone.");
+        Assert.IsTrue(Regex.IsMatch(targetRule, @"\bdisplay:\s*block\s*;"), "A native detail fragment must reveal only its :target.");
+        Assert.Contains("outline:", targetRule);
+        Assert.Contains(".crawl-details { margin: 0; }", css);
+        var section = Regex.Match(withoutScript, "<section class=\"crawl-details\"[^>]*>([\\s\\S]*?)</section>").Groups[1].Value;
+        Assert.HasCount(crawl.Entries.Length, Regex.Matches(section, "<article class=\"crawl-detail\""));
+        Assert.DoesNotContain("<h2", section); // No empty detail heading/section space before selection.
+        Assert.Contains("Select a hostname to reveal its public observation details.", withoutScript);
+        foreach (var entry in crawl.Entries)
+        {
+            var id = I2pCrawlViewerGenerator.Id(entry);
+            Assert.Contains($"href=\"#{id}\"", withoutScript);
+            var detail = Detail(withoutScript, entry);
+            Assert.Contains($"id=\"{id}\"", detail);
+            Assert.Contains("href=\"#directory\"", detail); // Directory target leaves every article non-targeted.
+        }
+        Assert.Contains("id=\"directory\"", withoutScript);
     }
 
     [TestMethod]

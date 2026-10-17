@@ -364,8 +364,10 @@ Observations, times and array position do not affect IDs. Native detail and pare
 anchors work with JavaScript disabled. Enhancement only searches hostname/title,
 filters Kind/Summary and sorts directory rows by hostname, kind, summary or numeric
 homepage HTTP. Reset clears filters and retains sorting; missing HTTP statuses
-sort last in either direction. All entries are initially shown. Details are never
-hidden by enhancement, so filtered rows cannot make deep links inaccessible.
+sort last in either direction. All directory entries are initially shown. Detail
+articles remain in the HTML but are hidden until selected by CSS `:target`, with
+no JavaScript requirement. Back to directory hides the selected article. Filters
+never control detail visibility, so filtered rows cannot make deep links inaccessible.
 There is no History API, random selection, clipboard feature or extra keyboard
 navigation. An enhancement failure restores all directory rows and disables controls.
 

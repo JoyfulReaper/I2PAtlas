@@ -239,8 +239,9 @@ The separate crawl inspection viewer initially shows every public entry, with
 kind, hostname, depth, title, summary, homepage HTTP and referrer columns. Known
 destination B32 and exact parent identities are visible in complete detail
 sections. Optional JavaScript adds hostname/title search, Kind and Summary filters,
-four column sorts and reset. Filters affect only directory rows; all details and
-native deep links remain available without JavaScript. It uses no remote assets
+four column sorts and reset. Filters affect only directory rows. Selecting a
+hostname reveals its public observation details through CSS fragment targeting,
+including without JavaScript; Back to directory hides the detail again. It uses no remote assets
 or network fetches. This is a local CLI pipeline, not deployment or hosting automation.
 
 ## Current limitations

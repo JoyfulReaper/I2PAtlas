@@ -121,7 +121,7 @@ test('identity breaks ties deterministically without merging same-hostname entri
     }
 });
 
-test('native detail anchors and every detail remain available even when the directory row is filtered out', () => {
+test('native detail targets remain available and JS never overrides CSS visibility when rows are filtered out', () => {
     const v = viewer();
     const links = v.rows.map(row => row.anchor.getAttribute('href'));
     v.filter('search', 'absent'); v.sort('kind');
@@ -129,6 +129,16 @@ test('native detail anchors and every detail remain available even when the dire
     assert.ok(v.panels.every(panel => !panel.hidden));
     assert.deepEqual(v.rows.map(row => row.anchor.getAttribute('href')), links);
     assert.ok(v.rows.every(row => Object.keys(row.anchor.events).length === 0));
+});
+
+test('detail visibility uses CSS target rules independently of JavaScript with no empty visible section heading', () => {
+    const css = template.match(/<style>([\s\S]*?)<\/style>/)[1];
+    assert.match(css.match(/\.crawl-detail\s*\{([^}]*)\}/)[1], /\bdisplay:\s*none\s*;/);
+    assert.match(css.match(/\.crawl-detail:target\s*\{([^}]*)\}/)[1], /\bdisplay:\s*block\s*;/);
+    assert.match(css.match(/\.crawl-details\s*\{([^}]*)\}/)[1], /\bmargin:\s*0\s*;/);
+    assert.match(template, /<section class="crawl-details" aria-label="Complete public observations">\{\{details\}\}<\/section>/);
+    assert.ok(!template.includes('id="details-title"'));
+    assert.ok(!script.includes('crawl-detail'), 'Enhancement must not manage detail visibility.');
 });
 
 test('empty crawl remains usable and reports zero matches without manufacturing entries', () => {
